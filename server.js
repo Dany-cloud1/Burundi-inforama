@@ -56,7 +56,7 @@ Retourne UNIQUEMENT un JSON valide sans markdown ni backticks :
   const data = await res.json();
   const raw = (data.content || []).map(i => i.type === 'text' ? i.text : '').join('');
   const clean = raw.replace(/```json|```/g, '').trim();
-  try { return JSON.parse(clean).art || [];
+  try { return JSON.parse(clean).art 
 }
 
 function buildMessage(a) {
