@@ -21,8 +21,13 @@ function addLog(msg, type) {
   console.log('[' + t + '] ' + msg);
 }
 
-async function fetchNewsWithWebSearch() {
+async function fetchNews() {
   addLog('Recherche live avec web search...', 'info');
+
+  if (!ANTHROPIC_KEY) {
+    addLog('CLE API MANQUANTE!', 'err');
+    return [];
+  }
 
   var headers = {
     'Content-Type': 'application/json',
@@ -30,44 +35,50 @@ async function fetchNewsWithWebSearch() {
     'x-api-key': ANTHROPIC_KEY
   };
 
-  // Step 1: Search the web for real news
+  // Step 1: Web search for real news
   var searchRes = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: headers,
     body: JSON.stringify({
-      model: 'claude-haiku-4-5-20251001',
+      model: 'claude-sonnet-4-5',
       max_tokens: 3000,
       tools: [{ type: 'web_search_20250305', name: 'web_search' }],
       messages: [{
         role: 'user',
-        content: 'Recherche les dernieres actualites du Burundi publiees par ces sources: Pacifique Nininahazwe (@pnininahazwe), FOCODE (@FOCODE_), SOS Medias Burundi (@SOSMediasBDI), Teddy Mazina (@TEDDYMAZINA), King Umurundi Freedom (@KUF_ASBL), Iwacu Burundi (@iwacuinfo), Antoine Kaburahe (@AntoineKaburahe), Bob Rugurika (@rugbob78), RFI Afrique Burundi, BBC Afrique Burundi. Cherche sur X/Twitter, Facebook et leurs sites web. Trouve au moins 6 articles recents en francais ou kirundi.'
+        content: 'Recherche les toutes dernieres actualites publiees aujourd hui ou cette semaine sur le Burundi par: Pacifique Nininahazwe (@pnininahazwe sur X/Twitter), FOCODE (@FOCODE_ sur X), SOS Medias Burundi (@SOSMediasBDI sur X), Teddy Mazina (@TEDDYMAZINA sur X), King Umurundi Freedom (@KUF_ASBL sur X), Iwacu Burundi (iwacu-burundi.org et @iwacuinfo), Antoine Kaburahe (@AntoineKaburahe sur X), Bob Rugurika RPA (@rugbob78 sur X), RFI Afrique Burundi, BBC Afrique Burundi. Cherche aussi sur leurs pages Facebook. Trouve minimum 6 articles tres recents en francais ou kirundi.'
       }]
     })
   });
 
+  addLog('Status web search: ' + searchRes.status, 'info');
   var searchData = await searchRes.json();
 
   if (searchData.error) {
-    addLog('Web search non disponible: ' + searchData.error.message, 'err');
-    return null; // signal to fall back
+    addLog('Erreur web search: ' + searchData.error.message, 'err');
+    return [];
   }
 
-  // Step 2: Convert results to JSON
+  addLog('Web search reussi!', 'ok');
+
+  // Step 2: Extract JSON from results
   var messages = [
-    { role: 'user', content: 'Recherche les dernieres actualites du Burundi publiees par ces sources: Pacifique Nininahazwe (@pnininahazwe), FOCODE (@FOCODE_), SOS Medias Burundi (@SOSMediasBDI), Teddy Mazina (@TEDDYMAZINA), King Umurundi Freedom (@KUF_ASBL), Iwacu Burundi (@iwacuinfo), Antoine Kaburahe (@AntoineKaburahe), Bob Rugurika (@rugbob78), RFI Afrique Burundi, BBC Afrique Burundi. Cherche sur X/Twitter, Facebook et leurs sites web. Trouve au moins 6 articles recents en francais ou kirundi.' },
+    {
+      role: 'user',
+      content: 'Recherche les toutes dernieres actualites publiees aujourd hui ou cette semaine sur le Burundi par: Pacifique Nininahazwe (@pnininahazwe sur X/Twitter), FOCODE (@FOCODE_ sur X), SOS Medias Burundi (@SOSMediasBDI sur X), Teddy Mazina (@TEDDYMAZINA sur X), King Umurundi Freedom (@KUF_ASBL sur X), Iwacu Burundi (iwacu-burundi.org et @iwacuinfo), Antoine Kaburahe (@AntoineKaburahe sur X), Bob Rugurika RPA (@rugbob78 sur X), RFI Afrique Burundi, BBC Afrique Burundi. Cherche aussi sur leurs pages Facebook. Trouve minimum 6 articles tres recents en francais ou kirundi.'
+    },
     { role: 'assistant', content: searchData.content }
   ];
 
   messages.push({
     role: 'user',
-    content: 'Maintenant base toi sur ces resultats et retourne UNIQUEMENT ce JSON valide sans rien d autre: {"articles":[{"id":"1","titre":"titre exact","resume":"resume de 2-3 phrases en francais","source":"nom source","handle":"@handle","url":"url si disponible sinon null","langue":"fr ou rn","categorie":"politique ou droits ou economie ou societe ou sport","date":"date exacte"}]}'
+    content: 'Parfait. Maintenant retourne UNIQUEMENT ce JSON valide sans aucun texte avant ou apres, sans markdown, sans backticks: {"articles":[{"id":"1","titre":"titre exact de l article","resume":"resume de 2-3 phrases en francais ou kirundi","source":"nom exact de la source","handle":"@handle","url":"url de l article ou null","langue":"fr ou rn","categorie":"politique ou droits ou economie ou societe ou sport","date":"date exacte de publication"}]}'
   });
 
   var jsonRes = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: headers,
     body: JSON.stringify({
-      model: 'claude-haiku-4-5-20251001',
+      model: 'claude-sonnet-4-5',
       max_tokens: 2000,
       messages: messages
     })
@@ -81,78 +92,23 @@ async function fetchNewsWithWebSearch() {
     }
   }
 
+  addLog('Reponse JSON: ' + raw.substring(0, 150), 'info');
+
   var match = raw.match(/\{[\s\S]*\}/);
-  if (!match) return null;
-
-  try {
-    var parsed = JSON.parse(match[0]);
-    addLog('Web search OK: ' + (parsed.articles||[]).length + ' articles', 'ok');
-    return parsed.articles || [];
-  } catch(e) {
-    return null;
-  }
-}
-
-async function fetchNewsAI() {
-  addLog('Mode IA (sans web search)...', 'info');
-
-  var headers = {
-    'Content-Type': 'application/json',
-    'anthropic-version': '2023-06-01',
-    'x-api-key': ANTHROPIC_KEY
-  };
-
-  var prompt = 'Tu es un expert des actualites du Burundi. Genere 6 articles d actualites recentes sur le Burundi en francais bases sur les evenements recents. Retourne UNIQUEMENT ce JSON valide sans rien d autre: {"articles":[{"id":"1","titre":"titre complet","resume":"Resume de 2-3 phrases en francais","source":"Iwacu","handle":"@iwacuinfo","url":null,"langue":"fr","categorie":"politique","date":"Avril 2026"},{"id":"2","titre":"titre","resume":"resume","source":"RFI Afrique","handle":"@RFIAfrique","url":null,"langue":"fr","categorie":"societe","date":"Avril 2026"},{"id":"3","titre":"titre","resume":"resume","source":"SOS Medias Burundi","handle":"@SOSMediasBDI","url":null,"langue":"fr","categorie":"droits","date":"Avril 2026"},{"id":"4","titre":"titre","resume":"resume","source":"FOCODE","handle":"@FOCODE_","url":null,"langue":"fr","categorie":"politique","date":"Avril 2026"},{"id":"5","titre":"titre","resume":"resume","source":"BBC Afrique","handle":"@BBCAfrica","url":null,"langue":"fr","categorie":"economie","date":"Avril 2026"},{"id":"6","titre":"titre","resume":"resume","source":"Pacifique Nininahazwe","handle":"@pnininahazwe","url":null,"langue":"fr","categorie":"droits","date":"Avril 2026"}]}';
-
-  var res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: headers,
-    body: JSON.stringify({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 2000,
-      messages: [{ role: 'user', content: prompt }]
-    })
-  });
-
-  var data = await res.json();
-  if (data.error) {
-    addLog('Erreur API: ' + data.error.message, 'err');
+  if (!match) {
+    addLog('Pas de JSON trouve', 'err');
     return [];
   }
 
-  var raw = '';
-  if (data.content) {
-    for (var i = 0; i < data.content.length; i++) {
-      if (data.content[i].type === 'text') raw += data.content[i].text;
-    }
-  }
-
-  var match = raw.match(/\{[\s\S]*\}/);
-  if (!match) { addLog('Pas de JSON', 'err'); return []; }
-
   try {
     var parsed = JSON.parse(match[0]);
-    addLog('IA OK: ' + (parsed.articles||[]).length + ' articles', 'ok');
-    return parsed.articles || [];
-  } catch(e) {
+    var articles = parsed.articles || [];
+    addLog('Articles trouves: ' + articles.length, articles.length > 0 ? 'ok' : 'err');
+    return articles;
+  } catch (e) {
     addLog('Erreur JSON: ' + e.message, 'err');
     return [];
   }
-}
-
-async function fetchNews() {
-  if (!ANTHROPIC_KEY) { addLog('CLE API MANQUANTE!', 'err'); return []; }
-
-  // Try web search first, fall back to AI if not available
-  try {
-    var webResults = await fetchNewsWithWebSearch();
-    if (webResults !== null) return webResults;
-  } catch(e) {
-    addLog('Web search echec: ' + e.message, 'err');
-  }
-
-  // Fallback to AI generation
-  return await fetchNewsAI();
 }
 
 function buildMessage(a) {
@@ -169,6 +125,7 @@ function buildMessage(a) {
 }
 
 async function postToTelegram(article) {
+  // Clean markdown special chars from title and resume
   var text = buildMessage(article);
   var r = await fetch('https://api.telegram.org/bot' + BOT_TOKEN + '/sendMessage', {
     method: 'POST',
@@ -181,7 +138,20 @@ async function postToTelegram(article) {
     totalPosted++;
     addLog('Poste: ' + article.titre.substring(0, 50), 'ok');
   } else {
-    addLog('Erreur Telegram: ' + d.description, 'err');
+    // Try without markdown if parsing fails
+    var r2 = await fetch('https://api.telegram.org/bot' + BOT_TOKEN + '/sendMessage', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: CHANNEL, text: text.replace(/[*_]/g, ''), disable_web_page_preview: false })
+    });
+    var d2 = await r2.json();
+    if (d2.ok) {
+      postedTitles.push(article.titre);
+      totalPosted++;
+      addLog('Poste (sans markdown): ' + article.titre.substring(0, 50), 'ok');
+    } else {
+      addLog('Erreur Telegram: ' + d2.description, 'err');
+    }
   }
 }
 
@@ -203,7 +173,7 @@ async function runCycle() {
       await sleep(2000);
     }
     if (fresh.length === 0) addLog('Aucun nouvel article', '');
-  } catch(e) {
+  } catch (e) {
     addLog('Erreur: ' + e.message, 'err');
   }
 }
