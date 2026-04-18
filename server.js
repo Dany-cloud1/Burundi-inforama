@@ -54,10 +54,12 @@ Retourne UNIQUEMENT un JSON valide sans markdown ni backticks :
   });
 
   const data = await res.json();
-  const raw = (data.content || []).map(i => i.type === 'text' ? i.text : '').join('');
-  const clean = raw.replace(/```json|```/g, '').trim();
-  try { return JSON.parse(clean).art 
-}
+  const textBlocks = (data.content||[]).filter(i=>i.type==='text').map(i=>i.text);
+const raw = textBlocks.join('');
+const match = raw.match(/\{[\s\S]*\}/);
+if(!match) return [];
+try { return JSON.parse(match[0]).articles||[]; } catch(e) { return []; }
+  
 
 function buildMessage(a) {
   const cat = { politique: '🏛️', droits: '✊', économie: '💰', société: '🌍', sport: '⚽' }[a.categorie] || '📰';
