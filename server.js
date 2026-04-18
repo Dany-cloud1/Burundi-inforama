@@ -52,7 +52,7 @@ Retourne UNIQUEMENT un JSON valide sans markdown ni backticks :
 6 à 10 articles récents.`,
       messages: [{ role: 'user', content: 'Cherche les dernières actualités Burundi en français ou kirundi. JSON uniquement.' }]
     })
-  });
+  });var data = await res.json();
 var raw = '';
 for (var i = 0; i < (data.content||[]).length; i++) {
   if (data.content[i].type === 'text') raw += data.content[i].text;
