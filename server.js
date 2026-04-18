@@ -23,6 +23,7 @@ function addLog(msg, type = '') {
 
 async function fetchNews() {
   addLog('Recherche des dernières actualités burundaises…', 'info');
+
   const headers = { 'Content-Type': 'application/json' };
   if (ANTHROPIC_KEY) headers['x-api-key'] = ANTHROPIC_KEY;
   headers['anthropic-version'] = '2023-06-01';
@@ -42,8 +43,8 @@ Cherche les toutes dernières nouvelles en FRANÇAIS ou KIRUNDI uniquement, publ
 - Teddy Mazina (@TEDDYMAZINA sur X)
 - King Umurundi Freedom (@KUF_ASBL sur X / kingumurundi-freedom.org)
 - Iwacu Burundi (@iwacuinfo sur X / iwacu-burundi.org)
-- Antoine Kaburahe (@AntoineKaburahe sur X)
-- Bob Rugurika (@rugbob78 sur X) — Radio Publique Africaine RPA
+- Antoine Kaburahe (@AntoineKaburahe sur X) — fondateur d'Iwacu
+- Bob Rugurika (@rugbob78 sur X) — directeur Radio Publique Africaine RPA
 - RFI Afrique Burundi, BBC Afrique Burundi
 
 Retourne UNIQUEMENT un JSON valide sans markdown ni backticks :
@@ -54,12 +55,10 @@ Retourne UNIQUEMENT un JSON valide sans markdown ni backticks :
   });
 
   const data = await res.json();
-  const textBlocks = (data.content||[]).filter(i=>i.type==='text').map(i=>i.text);
-const raw = textBlocks.join('');
-const match = raw.match(/\{[\s\S]*\}/);
-if(!match) return [];
-try { return JSON.parse(match[0]).articles||[]; } catch(e) { return []; }
-  
+  const raw = (data.content || []).map(i => i.type === 'text' ? i.text : '').join('');
+  const clean = raw.replace(/```json|```/g, '').trim();
+  return JSON.parse(clean).articles || [];
+}
 
 function buildMessage(a) {
   const cat = { politique: '🏛️', droits: '✊', économie: '💰', société: '🌍', sport: '⚽' }[a.categorie] || '📰';
@@ -91,20 +90,24 @@ async function runCycle() {
   const next = new Date(Date.now() + INTERVAL_HOURS * 60 * 60 * 1000);
   nextRun = next.toLocaleString('fr-FR');
   addLog(`--- Cycle démarré (prochain dans ${INTERVAL_HOURS}h) ---`, 'info');
+
   try {
     const articles = await fetchNews();
     const fresh = articles.filter(a => !postedTitles.has(a.titre));
     addLog(`${articles.length} articles trouvés, ${fresh.length} nouveaux.`, fresh.length > 0 ? 'ok' : '');
+
     for (const a of fresh) {
       await postToTelegram(a);
       await sleep(2000);
     }
+
     if (fresh.length === 0) addLog('Aucun nouvel article à poster.', '');
   } catch (e) {
     addLog(`❌ Erreur cycle: ${e.message}`, 'err');
   }
 }
 
+// Start the auto-cycle
 async function startScheduler() {
   addLog(`🚀 BURUNDI INFORAMA démarré. Canal: ${CHANNEL}`, 'ok');
   addLog(`⏱ Auto-post toutes les ${INTERVAL_HOURS} heures.`, 'info');
@@ -112,8 +115,12 @@ async function startScheduler() {
   setInterval(runCycle, INTERVAL_HOURS * 60 * 60 * 1000);
 }
 
+// Dashboard route
 app.get('/', (req, res) => {
-  const logHtml = logs.map(l => `<div class="log ${l.type}">[${l.time}] ${l.msg}</div>`).join('');
+  const logHtml = logs.map(l =>
+    `<div class="log ${l.type}">[${l.time}] ${l.msg}</div>`
+  ).join('');
+
   res.send(`<!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -138,17 +145,24 @@ app.get('/', (req, res) => {
 </head>
 <body>
 <h1>🇧🇮 BURUNDI INFORAMA</h1>
-<div class="sub">Dashboard · Canal: @BurundiInforama · Auto-refresh 60s</div>
+<div class="sub">Dashboard auto-refresh toutes les 60s · Canal: @BurundiInforama</div>
 <div class="stats">
-  <div class="stat"><div class="n" style="color:#00e676">${totalPosted}</div><div class="l">Postés</div></div>
+  <div class="stat"><div class="n" style="color:#00e676">${totalPosted}</div><div class="l">Articles postés</div></div>
   <div class="stat"><div class="n" style="color:#40c4ff">${INTERVAL_HOURS}h</div><div class="l">Intervalle</div></div>
-  <div class="stat"><div class="n" style="color:#ffd740;font-size:0.75rem">${lastRun || '—'}</div><div class="l">Dernier cycle</div></div>
+  <div class="stat"><div class="n" style="color:#ffd740;font-size:0.8rem">${lastRun || '—'}</div><div class="l">Dernier cycle</div></div>
 </div>
-<div class="box"><h3>Prochain post</h3><span class="badge">⏱ ${nextRun || 'En attente…'}</span></div>
-<div class="box"><h3>Journal</h3>${logHtml || '<div class="log">Aucune activité.</div>'}</div>
+<div class="box">
+  <h3>Prochain post</h3>
+  <span class="badge">⏱ ${nextRun || 'En attente…'}</span>
+</div>
+<div class="box">
+  <h3>Journal d'activité</h3>
+  ${logHtml || '<div class="log">Aucune activité.</div>'}
+</div>
 </body></html>`);
 });
 
+// Health check
 app.get('/health', (req, res) => res.json({ status: 'ok', totalPosted, lastRun, nextRun }));
 
 app.listen(PORT, () => {
