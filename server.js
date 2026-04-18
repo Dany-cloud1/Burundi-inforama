@@ -53,8 +53,7 @@ Retourne UNIQUEMENT un JSON valide sans markdown ni backticks :
       messages: [{ role: 'user', content: 'Cherche les dernières actualités Burundi en français ou kirundi. JSON uniquement.' }]
     })
   });
-
-  var raw = '';
+var raw = '';
 for (var i = 0; i < (data.content||[]).length; i++) {
   if (data.content[i].type === 'text') raw += data.content[i].text;
 }
