@@ -24,36 +24,30 @@ function addLog(msg, type) {
 async function fetchNews() {
   addLog('Recherche des actualites...', 'info');
 
-  var headers = {
-    'Content-Type': 'application/json',
-    'anthropic-version': '2023-06-01'
-  };
-  if (ANTHROPIC_KEY) {
-    headers['x-api-key'] = ANTHROPIC_KEY;
-  } else {
-    addLog('API KEY MANQUANTE!', 'err');
+  if (!ANTHROPIC_KEY) {
+    addLog('CLE API MANQUANTE!', 'err');
     return [];
   }
 
-  var body = {
-    model: 'claude-sonnet-4-5
-    max_tokens: 2000,
-    messages: [{
-      role: 'user',
-      content: 'Tu es un expert des actualites du Burundi. Genere 6 articles d actualites recentes et realistes sur le Burundi en francais, bases sur ce que tu sais des evenements recents au Burundi. Retourne UNIQUEMENT ce JSON valide, sans markdown, sans backticks, sans texte avant ou apres:\n{"articles":[{"id":"1","titre":"titre complet ici","resume":"Resume de 2-3 phrases en francais","source":"Iwacu","handle":"@iwacuinfo","url":null,"langue":"fr","categorie":"politique","date":"Avril 2026"},{"id":"2","titre":"titre ici","resume":"Resume ici","source":"RFI Afrique","handle":"@RFIAfrique","url":null,"langue":"fr","categorie":"societe","date":"Avril 2026"}]}'
-    }]
+  var headers = {
+    'Content-Type': 'application/json',
+    'anthropic-version': '2023-06-01',
+    'x-api-key': ANTHROPIC_KEY
   };
 
-  addLog('Appel API Anthropic...', 'info');
+  var prompt = 'Tu es un expert des actualites du Burundi. Genere 6 articles d actualites recentes sur le Burundi en francais. Retourne UNIQUEMENT ce JSON valide sans rien d autre: {"articles":[{"id":"1","titre":"titre ici","resume":"Resume de 2-3 phrases","source":"Iwacu","handle":"@iwacuinfo","url":null,"langue":"fr","categorie":"politique","date":"Avril 2026"},{"id":"2","titre":"titre ici","resume":"Resume ici","source":"RFI Afrique","handle":"@RFIAfrique","url":null,"langue":"fr","categorie":"societe","date":"Avril 2026"},{"id":"3","titre":"titre ici","resume":"Resume ici","source":"SOS Medias Burundi","handle":"@SOSMediasBDI","url":null,"langue":"fr","categorie":"droits","date":"Avril 2026"},{"id":"4","titre":"titre ici","resume":"Resume ici","source":"FOCODE","handle":"@FOCODE_","url":null,"langue":"fr","categorie":"politique","date":"Avril 2026"},{"id":"5","titre":"titre ici","resume":"Resume ici","source":"BBC Afrique","handle":"@BBCAfrica","url":null,"langue":"fr","categorie":"economie","date":"Avril 2026"},{"id":"6","titre":"titre ici","resume":"Resume ici","source":"Iwacu","handle":"@iwacuinfo","url":null,"langue":"fr","categorie":"sport","date":"Avril 2026"}]}';
 
   var res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: headers,
-    body: JSON.stringify(body)
+    body: JSON.stringify({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 2000,
+      messages: [{ role: 'user', content: prompt }]
+    })
   });
 
   addLog('Status HTTP: ' + res.status, 'info');
-
   var data = await res.json();
 
   if (data.error) {
@@ -70,17 +64,16 @@ async function fetchNews() {
     }
   }
 
-  addLog('Reponse recue: ' + raw.substring(0, 150), 'info');
+  addLog('Reponse: ' + raw.substring(0, 100), 'info');
 
   var match = raw.match(/\{[\s\S]*\}/);
   if (!match) {
-    addLog('Pas de JSON trouve dans: ' + raw.substring(0, 100), 'err');
+    addLog('Pas de JSON trouve', 'err');
     return [];
   }
 
   try {
     var parsed = JSON.parse(match[0]);
-    addLog('JSON parse OK: ' + (parsed.articles || []).length + ' articles', 'ok');
     return parsed.articles || [];
   } catch (e) {
     addLog('Erreur JSON: ' + e.message, 'err');
@@ -89,7 +82,8 @@ async function fetchNews() {
 }
 
 function buildMessage(a) {
-  var cat = { politique: '🏛️', droits: '✊', economie: '💰', societe: '🌍', sport: '⚽' }[a.categorie] || '📰';
+  var cats = { politique: '🏛️', droits: '✊', economie: '💰', societe: '🌍', sport: '⚽' };
+  var cat = cats[a.categorie] || '📰';
   var tag = a.langue === 'rn' ? '#Burundi #Kirundi' : '#Burundi #Actualites';
   var msg = cat + ' *' + a.titre + '*\n\n' + a.resume + '\n\n📌 _Source: ' + a.source;
   if (a.handle) msg += ' ' + a.handle;
@@ -146,7 +140,7 @@ async function runCycle() {
 
 async function startScheduler() {
   addLog('BURUNDI INFORAMA demarre sur ' + CHANNEL, 'ok');
-  addLog('Cle API: ' + (ANTHROPIC_KEY ? 'OK (' + ANTHROPIC_KEY.substring(0,10) + '...)' : 'MANQUANTE!'), ANTHROPIC_KEY ? 'ok' : 'err');
+  addLog('Cle API: ' + (ANTHROPIC_KEY ? 'OK' : 'MANQUANTE!'), ANTHROPIC_KEY ? 'ok' : 'err');
   addLog('Auto-post toutes les ' + INTERVAL_HOURS + 'h', 'info');
   await runCycle();
   setInterval(runCycle, INTERVAL_HOURS * 3600000);
@@ -160,7 +154,7 @@ app.get('/', function(req, res) {
 });
 
 app.get('/health', function(req, res) {
-  res.json({ status: 'ok', totalPosted: totalPosted, lastRun: lastRun, nextRun: nextRun, hasKey: !!ANTHROPIC_KEY });
+  res.json({ status: 'ok', totalPosted: totalPosted, lastRun: lastRun, nextRun: nextRun });
 });
 
 app.listen(PORT, function() {
