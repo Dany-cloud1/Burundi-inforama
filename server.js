@@ -32,58 +32,80 @@ async function fetchNews() {
   };
 
   var today = new Date().toDateString();
-  var weekAgo = new Date(Date.now() - 7*24*60*60*1000).toDateString();
 
-  // Short focused search prompt to avoid rate limits
-  var searchPrompt = 'Today: ' + today + '. Find 8 recent Burundi news articles in French or Kirundi from 2026 only (after ' + weekAgo + '). Sources: iwacu-burundi.org, pnininahazwe X, FOCODE_ X, SOSMediasBDI X, KUF_ASBL X, RTNBurundi X, BurundiGov X, RFI Afrique, BBC Afrique. Different sources, different topics only.';
-
-  // Step 1: Web search
-  var searchRes = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: headers,
-    body: JSON.stringify({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 1500,
-      tools: [{ type: 'web_search_20250305', name: 'web_search' }],
-      messages: [{ role: 'user', content: searchPrompt }]
-    })
-  });
-
-  addLog('Status: ' + searchRes.status, 'info');
-  var searchData = await searchRes.json();
-  if (searchData.error) { addLog('Erreur: ' + searchData.error.message.substring(0, 60), 'err'); return []; }
-  addLog('Web search OK!', 'ok');
-
-  // Step 2: Get JSON
-  var messages = [
-    { role: 'user', content: searchPrompt },
-    { role: 'assistant', content: searchData.content },
-    { role: 'user', content: 'Output ONLY JSON, nothing else. Start with { end with }: {"articles":[{"id":"1","titre":"title","resume":"max 80 char summary in French","source":"name","handle":"@x","url":null,"langue":"fr","categorie":"politique","date":"date"}]}' }
-  ];
-
-  var jsonRes = await fetch('https://api.anthropic.com/v1/messages', {
+  // Single call with web search + JSON system prompt
+  var res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: headers,
     body: JSON.stringify({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 2000,
-      messages: messages
+      system: 'You are a Burundi news collector. After searching, respond ONLY with a valid JSON object starting with { and ending with }. No other text. Format: {"articles":[{"id":"1","titre":"title","resume":"short summary in French max 80 chars","source":"name","handle":"@x","url":null,"langue":"fr","categorie":"politique","date":"date"}]}',
+      tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+      messages: [{
+        role: 'user',
+        content: 'Today is ' + today + '. Search for 6 recent Burundi news articles from 2026 in French or Kirundi from these sources: iwacu-burundi.org, pnininahazwe on X, FOCODE_ on X, SOSMediasBDI on X, RFI Afrique Burundi, BBC Afrique Burundi. Each article must be from a different source. Return only the JSON.'
+      }]
     })
   });
 
-  var jsonData = await jsonRes.json();
+  addLog('Status: ' + res.status, 'info');
+  var data = await res.json();
+
+  if (data.error) {
+    addLog('Erreur: ' + data.error.message.substring(0, 80), 'err');
+    return [];
+  }
+
+  // Extract text from all content blocks
   var raw = '';
-  if (jsonData.content) {
-    for (var i = 0; i < jsonData.content.length; i++) {
-      if (jsonData.content[i].type === 'text') raw += jsonData.content[i].text;
+  if (data.content) {
+    for (var i = 0; i < data.content.length; i++) {
+      if (data.content[i].type === 'text') {
+        raw += data.content[i].text;
+      }
     }
   }
 
-  addLog('Recu: ' + raw.substring(0, 80), 'info');
+  addLog('Recu: ' + raw.substring(0, 100), 'info');
+
+  if (!raw || raw.trim().length < 5) {
+    // Model used tools but didn't respond with text yet - need follow up
+    addLog('Envoi suivi...', 'info');
+
+    var followMessages = [
+      { role: 'user', content: 'Today is ' + today + '. Search for 6 recent Burundi news articles from 2026 in French or Kirundi from these sources: iwacu-burundi.org, pnininahazwe on X, FOCODE_ on X, SOSMediasBDI on X, RFI Afrique Burundi, BBC Afrique Burundi. Each article must be from a different source. Return only the JSON.' },
+      { role: 'assistant', content: data.content },
+      { role: 'user', content: 'Now respond with ONLY the JSON object. Start with { and end with }. No explanation.' }
+    ];
+
+    var res2 = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: headers,
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 1500,
+        system: 'Respond ONLY with valid JSON. No text before or after. Format: {"articles":[{"id":"1","titre":"title","resume":"summary","source":"name","handle":"@x","url":null,"langue":"fr","categorie":"politique","date":"date"}]}',
+        messages: followMessages
+      })
+    });
+
+    var data2 = await res2.json();
+    raw = '';
+    if (data2.content) {
+      for (var j = 0; j < data2.content.length; j++) {
+        if (data2.content[j].type === 'text') raw += data2.content[j].text;
+      }
+    }
+    addLog('Suivi recu: ' + raw.substring(0, 100), 'info');
+  }
 
   var start = raw.indexOf('{');
   var end = raw.lastIndexOf('}');
-  if (start === -1 || end === -1) { addLog('Pas de JSON', 'err'); return []; }
+  if (start === -1 || end === -1) {
+    addLog('Pas de JSON dans: ' + raw.substring(0, 60), 'err');
+    return [];
+  }
 
   try {
     var parsed = JSON.parse(raw.substring(start, end + 1));
