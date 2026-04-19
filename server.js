@@ -1,5 +1,6 @@
 const express = require('express');
 const app = express();
+const fs = require('fs');
 const PORT = process.env.PORT || 3000;
 
 const BOT_TOKEN = process.env.BOT_TOKEN || '8668406284:AAEbopVYNUdb6ZbJTwFZF_LMH7xiFs9pcXg';
@@ -7,7 +8,36 @@ const CHANNEL = process.env.CHANNEL || '@BurundiInforama';
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
 const INTERVAL_HOURS = parseFloat(process.env.INTERVAL_HOURS || '1');
 
-var postedTitles = [];
+// --- FACEBOOK CONFIG ---
+const FB_PAGE_ID = process.env.FB_PAGE_ID;
+const FB_ACCESS_TOKEN = process.env.FB_ACCESS_TOKEN;
+
+// --- PERSISTENT STORAGE ---
+const TITLES_FILE = '/tmp/posted_titles.json';
+const MAX_TITLES = 200;
+
+function loadPostedTitles() {
+  try {
+    if (fs.existsSync(TITLES_FILE)) {
+      var data = fs.readFileSync(TITLES_FILE, 'utf8');
+      return JSON.parse(data);
+    }
+  } catch (e) {
+    console.log('Could not load titles file:', e.message);
+  }
+  return [];
+}
+
+function savePostedTitles(titles) {
+  try {
+    var trimmed = titles.slice(-MAX_TITLES);
+    fs.writeFileSync(TITLES_FILE, JSON.stringify(trimmed));
+  } catch (e) {
+    console.log('Could not save titles file:', e.message);
+  }
+}
+
+var postedTitles = loadPostedTitles();
 var totalPosted = 0;
 var lastRun = null;
 var nextRun = null;
@@ -33,7 +63,6 @@ async function fetchNews() {
 
   var today = new Date().toDateString();
 
-  // Single call with web search + JSON system prompt
   var res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: headers,
@@ -57,20 +86,16 @@ async function fetchNews() {
     return [];
   }
 
-  // Extract text from all content blocks
   var raw = '';
   if (data.content) {
     for (var i = 0; i < data.content.length; i++) {
-      if (data.content[i].type === 'text') {
-        raw += data.content[i].text;
-      }
+      if (data.content[i].type === 'text') raw += data.content[i].text;
     }
   }
 
   addLog('Recu: ' + raw.substring(0, 100), 'info');
 
   if (!raw || raw.trim().length < 5) {
-    // Model used tools but didn't respond with text yet - need follow up
     addLog('Envoi suivi...', 'info');
 
     var followMessages = [
@@ -129,6 +154,17 @@ function buildMessage(a) {
   return msg;
 }
 
+function buildFacebookMessage(a) {
+  var cats = { politique: '🏛️', droits: '✊', economie: '💰', societe: '🌍', sport: '⚽' };
+  var cat = cats[a.categorie] || '📰';
+  var msg = cat + ' ' + (a.titre || '') + '\n\n' + (a.resume || '') + '\n\nSource: ' + (a.source || '');
+  if (a.handle) msg += ' ' + a.handle;
+  if (a.date) msg += '\n' + a.date;
+  if (a.url) msg += '\n\n🔗 ' + a.url;
+  msg += '\n\n#Burundi #Actualites #BurundiInforama';
+  return msg;
+}
+
 async function postToTelegram(article) {
   var text = buildMessage(article);
   var r = await fetch('https://api.telegram.org/bot' + BOT_TOKEN + '/sendMessage', {
@@ -139,10 +175,34 @@ async function postToTelegram(article) {
   var d = await r.json();
   if (d.ok) {
     postedTitles.push(article.titre);
+    savePostedTitles(postedTitles);
     totalPosted++;
-    addLog('Poste: ' + (article.titre || '').substring(0, 50), 'ok');
+    addLog('Poste Telegram: ' + (article.titre || '').substring(0, 50), 'ok');
   } else {
     addLog('Erreur Telegram: ' + d.description, 'err');
+  }
+}
+
+async function postToFacebook(article) {
+  if (!FB_PAGE_ID || !FB_ACCESS_TOKEN) {
+    addLog('Facebook: config manquante (FB_PAGE_ID ou FB_ACCESS_TOKEN)', 'err');
+    return;
+  }
+  var text = buildFacebookMessage(article);
+  var url = 'https://graph.facebook.com/v19.0/' + FB_PAGE_ID + '/feed';
+  var body = { message: text, access_token: FB_ACCESS_TOKEN };
+  if (article.url) body.link = article.url;
+
+  var r = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  var d = await r.json();
+  if (d.id) {
+    addLog('Poste Facebook: ' + (article.titre || '').substring(0, 50), 'ok');
+  } else {
+    addLog('Erreur Facebook: ' + JSON.stringify(d).substring(0, 80), 'err');
   }
 }
 
@@ -162,6 +222,8 @@ async function runCycle() {
     for (var j = 0; j < fresh.length; j++) {
       await postToTelegram(fresh[j]);
       await sleep(2000);
+      await postToFacebook(fresh[j]);
+      await sleep(2000);
     }
     if (fresh.length === 0) addLog('Aucun nouvel article', '');
   } catch (e) {
@@ -172,6 +234,8 @@ async function runCycle() {
 async function startScheduler() {
   addLog('BURUNDI INFORAMA demarre sur ' + CHANNEL, 'ok');
   addLog('Cle API: ' + (ANTHROPIC_KEY ? 'OK' : 'MANQUANTE!'), ANTHROPIC_KEY ? 'ok' : 'err');
+  addLog('Facebook: ' + (FB_PAGE_ID && FB_ACCESS_TOKEN ? 'OK' : 'Non configure'), FB_PAGE_ID && FB_ACCESS_TOKEN ? 'ok' : 'err');
+  addLog('Titres en memoire: ' + postedTitles.length, 'info');
   addLog('Intervalle: ' + INTERVAL_HOURS + 'h', 'info');
   await runCycle();
   setInterval(runCycle, INTERVAL_HOURS * 3600000);
@@ -185,7 +249,7 @@ app.get('/', function(req, res) {
 });
 
 app.get('/health', function(req, res) {
-  res.json({ status: 'ok', totalPosted: totalPosted, lastRun: lastRun, nextRun: nextRun });
+  res.json({ status: 'ok', totalPosted: totalPosted, lastRun: lastRun, nextRun: nextRun, postedTitlesCount: postedTitles.length });
 });
 
 app.listen(PORT, function() {
