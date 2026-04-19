@@ -42,7 +42,7 @@ async function fetchNews() {
       system: 'You are a Burundi news collector. Search for latest Burundi news in French or Kirundi. After searching, you MUST respond with ONLY a valid JSON object in this exact format, nothing else: {"articles":[{"id":"1","titre":"title","resume":"2-3 sentence summary in French","source":"source name","handle":"@handle","url":"url or null","langue":"fr","categorie":"politique","date":"date"}]}',
       messages: [{
         role: 'user',
-        content: 'Search for the 6 most recent Burundi news articles in French from iwacu-burundi.org, pnininahazwe on X, FOCODE_ on X, SOSMediasBDI on X, RFI Afrique Burundi, BBC Afrique Burundi. Then return the JSON.'
+        content: 'Search for the 6 most recent Burundi news articles published in the LAST 3 DAYS ONLY in French from iwacu-burundi.org, pnininahazwe on X, FOCODE_ on X, SOSMediasBDI on X, King Umurundi Freedom (@KUF_ASBL on X), RFI Afrique Burundi, BBC Afrique Burundi, Radio RPA (@rugbob78), Radio Humura, Radio Isanganiro, Radio Inkinzo, Radio Peace FM. IGNORE any article older than 3 days. Then return the JSON.'
       }]
     })
   });
@@ -72,7 +72,7 @@ async function fetchNews() {
     addLog('Envoi demande JSON...', 'info');
 
     var messages2 = [
-      { role: 'user', content: 'Search for the 6 most recent Burundi news articles in French from iwacu-burundi.org, pnininahazwe on X, FOCODE_ on X, SOSMediasBDI on X, RFI Afrique Burundi, BBC Afrique Burundi. Then return the JSON.' },
+      { role: 'user', content: 'Search for the 6 most recent Burundi news articles published in the LAST 3 DAYS ONLY in French from iwacu-burundi.org, pnininahazwe on X, FOCODE_ on X, SOSMediasBDI on X, King Umurundi Freedom (@KUF_ASBL on X), RFI Afrique Burundi, BBC Afrique Burundi, Radio RPA (@rugbob78), Radio Humura, Radio Isanganiro, Radio Inkinzo, Radio Peace FM. IGNORE any article older than 3 days. Then return the JSON.' },
       { role: 'assistant', content: data.content }
     ];
 
@@ -188,6 +188,7 @@ app.listen(PORT, function() {
   console.log('Server running on port ' + PORT);
   startScheduler();
 });
+
 
 
 
