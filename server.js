@@ -41,7 +41,7 @@ async function fetchNews() {
       tools: [{ type: 'web_search_20250305', name: 'web_search' }],
       messages: [{
         role: 'user',
-        content: 'Search for recent Burundi news in French or Kirundi from: iwacu-burundi.org, pnininahazwe on X, FOCODE_ on X, SOSMediasBDI on X, KUF_ASBL on X, RFI Afrique Burundi, BBC Afrique Burundi, Radio RPA rugbob78, Radio Isanganiro, Radio Humura. Find 10 different articles from different sources published this week.'
+        content: 'Today is ' + new Date().toDateString() + '. Search for Burundi news in French or Kirundi published in the last 7 days (after ' + new Date(Date.now() - 7*24*60*60*1000).toDateString() + ') from: iwacu-burundi.org, pnininahazwe on X, FOCODE_ on X, SOSMediasBDI on X, KUF_ASBL on X, RFI Afrique Burundi, BBC Afrique Burundi, Radio RPA rugbob78, Radio Isanganiro, Radio Humura, @ntarehouse, @RTNBurundi, @GeneralNeva, @Baratuza2000, @RT_Isanganiro, @kwaNtare, @BurundiGov, @nshingamateka. ONLY include articles published in 2026. Ignore anything from 2025 or earlier. Find 8 different articles from different sources.'
       }]
     })
   });
@@ -52,7 +52,7 @@ async function fetchNews() {
 
   // Step 2: Extract JSON - strict prompt
   var messages = [
-    { role: 'user', content: 'Search for recent Burundi news in French or Kirundi from: iwacu-burundi.org, pnininahazwe on X, FOCODE_ on X, SOSMediasBDI on X, KUF_ASBL on X, RFI Afrique Burundi, BBC Afrique Burundi, Radio RPA rugbob78, Radio Isanganiro, Radio Humura. Find 10 different articles from different sources published this week.' },
+    { role: 'user', content: 'Today is ' + new Date().toDateString() + '. Search for Burundi news in French or Kirundi published in the last 7 days (after ' + new Date(Date.now() - 7*24*60*60*1000).toDateString() + ') from: iwacu-burundi.org, pnininahazwe on X, FOCODE_ on X, SOSMediasBDI on X, KUF_ASBL on X, RFI Afrique Burundi, BBC Afrique Burundi, Radio RPA rugbob78, Radio Isanganiro, Radio Humura, @ntarehouse, @RTNBurundi, @GeneralNeva, @Baratuza2000, @RT_Isanganiro, @kwaNtare, @BurundiGov, @nshingamateka. ONLY include articles published in 2026. Ignore anything from 2025 or earlier. Find 8 different articles from different sources.' },
     { role: 'assistant', content: searchData.content },
     { role: 'user', content: 'Now output ONLY a JSON object. No explanations. No text before or after. Start with { and end with }. Use this exact format: {"articles":[{"id":"1","titre":"title","resume":"summary in French max 2 sentences","source":"source","handle":"@x","url":null,"langue":"fr","categorie":"politique","date":"date"}]}. Include max 8 articles. Keep each resume under 100 characters.' }
   ];
@@ -168,5 +168,6 @@ app.listen(PORT, function() {
   console.log('Server running on port ' + PORT);
   startScheduler();
 });
+
 
 
