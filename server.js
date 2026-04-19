@@ -31,85 +31,65 @@ async function fetchNews() {
     'x-api-key': ANTHROPIC_KEY
   };
 
-  // Single call: search + return JSON directly
-  var res = await fetch('https://api.anthropic.com/v1/messages', {
+  // Step 1: Web search
+  var searchRes = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: headers,
     body: JSON.stringify({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 2000,
       tools: [{ type: 'web_search_20250305', name: 'web_search' }],
-      system: 'You are a Burundi news collector. Search for latest Burundi news in French or Kirundi. After searching, you MUST respond with ONLY a valid JSON object in this exact format, nothing else: {"articles":[{"id":"1","titre":"title","resume":"2-3 sentence summary in original language (French or Kirundi)","source":"source name","handle":"@handle","url":"url or null","langue":"fr or rn","categorie":"politique","date":"date"}]}',
       messages: [{
         role: 'user',
-        content: 'Search for 10 to 12 recent Burundi news articles published in the last 7 days in French OR Kirundi from iwacu-burundi.org, pnininahazwe on X, FOCODE_ on X, SOSMediasBDI on X, King Umurundi Freedom (@KUF_ASBL on X), RFI Afrique Burundi, BBC Afrique Burundi, Radio RPA (@rugbob78), Radio Humura, Radio Isanganiro, Radio Inkinzo, Radio Peace FM. STRICT RULES: (1) Maximum 1 article per source - do not use same source twice. (2) No duplicate topics - each article must cover a different subject. (3) Prioritize variety across all sources listed. (4) If less than 10 found in 7 days, include most recent available. Return the JSON.'
+        content: 'Search for recent Burundi news in French or Kirundi from: iwacu-burundi.org, pnininahazwe on X, FOCODE_ on X, SOSMediasBDI on X, KUF_ASBL on X, RFI Afrique Burundi, BBC Afrique Burundi, Radio RPA rugbob78, Radio Isanganiro, Radio Humura. Find 10 different articles from different sources published this week.'
       }]
     })
   });
 
-  addLog('Status: ' + res.status, 'info');
-  var data = await res.json();
+  addLog('Status: ' + searchRes.status, 'info');
+  var searchData = await searchRes.json();
+  if (searchData.error) { addLog('Erreur: ' + searchData.error.message.substring(0, 60), 'err'); return []; }
 
-  if (data.error) {
-    addLog('Erreur: ' + data.error.message.substring(0, 80), 'err');
-    return [];
-  }
+  // Step 2: Extract JSON - strict prompt
+  var messages = [
+    { role: 'user', content: 'Search for recent Burundi news in French or Kirundi from: iwacu-burundi.org, pnininahazwe on X, FOCODE_ on X, SOSMediasBDI on X, KUF_ASBL on X, RFI Afrique Burundi, BBC Afrique Burundi, Radio RPA rugbob78, Radio Isanganiro, Radio Humura. Find 10 different articles from different sources published this week.' },
+    { role: 'assistant', content: searchData.content },
+    { role: 'user', content: 'Now output ONLY a JSON object. No explanations. No text before or after. Start with { and end with }. Use this exact format: {"articles":[{"id":"1","titre":"title","resume":"summary in French max 2 sentences","source":"source","handle":"@x","url":null,"langue":"fr","categorie":"politique","date":"date"}]}. Include max 8 articles. Keep each resume under 100 characters.' }
+  ];
 
-  // Extract all text from response
+  var jsonRes = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: headers,
+    body: JSON.stringify({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 3000,
+      messages: messages
+    })
+  });
+
+  var jsonData = await jsonRes.json();
   var raw = '';
-  if (data.content) {
-    for (var i = 0; i < data.content.length; i++) {
-      if (data.content[i].type === 'text') {
-        raw += data.content[i].text;
-      }
+  if (jsonData.content) {
+    for (var i = 0; i < jsonData.content.length; i++) {
+      if (jsonData.content[i].type === 'text') raw += jsonData.content[i].text;
     }
   }
 
-  addLog('Texte recu: ' + raw.substring(0, 100), 'info');
+  addLog('Recu: ' + raw.substring(0, 80), 'info');
 
-  // If no text yet, the model used tools - send follow up
-  if (!raw || raw.trim().length < 10) {
-    addLog('Envoi demande JSON...', 'info');
+  // Find JSON in response
+  var start = raw.indexOf('{');
+  var end = raw.lastIndexOf('}');
+  if (start === -1 || end === -1) { addLog('Pas de JSON', 'err'); return []; }
 
-    var messages2 = [
-      { role: 'user', content: 'Search for 10 to 12 recent Burundi news articles published in the last 7 days in French OR Kirundi from iwacu-burundi.org, pnininahazwe on X, FOCODE_ on X, SOSMediasBDI on X, King Umurundi Freedom (@KUF_ASBL on X), RFI Afrique Burundi, BBC Afrique Burundi, Radio RPA (@rugbob78), Radio Humura, Radio Isanganiro, Radio Inkinzo, Radio Peace FM. STRICT RULES: (1) Maximum 1 article per source - do not use same source twice. (2) No duplicate topics - each article must cover a different subject. (3) Prioritize variety across all sources listed. (4) If less than 10 found in 7 days, include most recent available. Return the JSON.' },
-      { role: 'assistant', content: data.content }
-    ];
-
-    var res2 = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: headers,
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 2000,
-        messages: messages2,
-        system: 'Return ONLY valid JSON with 10-12 articles. Each article must be from a DIFFERENT source and cover a DIFFERENT topic. No duplicate sources, no duplicate subjects: {"articles":[{"id":"1","titre":"title in French or Kirundi","resume":"summary in French or Kirundi","source":"source","handle":"@handle","url":"url or null","langue":"fr or rn","categorie":"politique","date":"date"}]}'
-      })
-    });
-
-    var data2 = await res2.json();
-    raw = '';
-    if (data2.content) {
-      for (var j = 0; j < data2.content.length; j++) {
-        if (data2.content[j].type === 'text') raw += data2.content[j].text;
-      }
-    }
-    addLog('JSON recu: ' + raw.substring(0, 100), 'info');
-  }
-
-  var match = raw.match(/\{[\s\S]*\}/);
-  if (!match) {
-    addLog('Pas de JSON dans: ' + raw.substring(0, 80), 'err');
-    return [];
-  }
-
+  var jsonStr = raw.substring(start, end + 1);
   try {
-    var parsed = JSON.parse(match[0]);
+    var parsed = JSON.parse(jsonStr);
     var articles = parsed.articles || [];
-    addLog(articles.length + ' articles!', articles.length > 0 ? 'ok' : 'err');
+    addLog(articles.length + ' articles trouves!', articles.length > 0 ? 'ok' : 'err');
     return articles;
   } catch (e) {
-    addLog('Erreur JSON: ' + e.message, 'err');
+    addLog('Erreur JSON: ' + e.message.substring(0, 60), 'err');
     return [];
   }
 }
@@ -117,7 +97,7 @@ async function fetchNews() {
 function buildMessage(a) {
   var cats = { politique: '🏛️', droits: '✊', economie: '💰', societe: '🌍', sport: '⚽' };
   var cat = cats[a.categorie] || '📰';
-  var msg = cat + ' ' + (a.titre||'') + '\n\n' + (a.resume||'') + '\n\nSource: ' + (a.source||'');
+  var msg = cat + ' ' + (a.titre || '') + '\n\n' + (a.resume || '') + '\n\nSource: ' + (a.source || '');
   if (a.handle) msg += ' ' + a.handle;
   if (a.date) msg += '\n' + a.date;
   if (a.url) msg += '\n' + a.url;
@@ -136,7 +116,7 @@ async function postToTelegram(article) {
   if (d.ok) {
     postedTitles.push(article.titre);
     totalPosted++;
-    addLog('Poste: ' + (article.titre||'').substring(0, 50), 'ok');
+    addLog('Poste: ' + (article.titre || '').substring(0, 50), 'ok');
   } else {
     addLog('Erreur Telegram: ' + d.description, 'err');
   }
@@ -188,4 +168,5 @@ app.listen(PORT, function() {
   console.log('Server running on port ' + PORT);
   startScheduler();
 });
+
 
