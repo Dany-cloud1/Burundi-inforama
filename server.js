@@ -42,7 +42,7 @@ async function fetchNews() {
       system: 'You are a Burundi news collector. Search for latest Burundi news in French or Kirundi. After searching, you MUST respond with ONLY a valid JSON object in this exact format, nothing else: {"articles":[{"id":"1","titre":"title","resume":"2-3 sentence summary in original language (French or Kirundi)","source":"source name","handle":"@handle","url":"url or null","langue":"fr or rn","categorie":"politique","date":"date"}]}',
       messages: [{
         role: 'user',
-        content: 'Search for the 6 most recent Burundi news articles published in the last 7 days in French OR Kirundi from iwacu-burundi.org, pnininahazwe on X, FOCODE_ on X, SOSMediasBDI on X, King Umurundi Freedom (@KUF_ASBL on X), RFI Afrique Burundi, BBC Afrique Burundi, Radio RPA (@rugbob78), Radio Humura, Radio Isanganiro, Radio Inkinzo, Radio Peace FM. If no articles from last 7 days, use most recent available. Then return the JSON.'
+        content: 'Search for 10 to 12 recent Burundi news articles published in the last 7 days in French OR Kirundi from iwacu-burundi.org, pnininahazwe on X, FOCODE_ on X, SOSMediasBDI on X, King Umurundi Freedom (@KUF_ASBL on X), RFI Afrique Burundi, BBC Afrique Burundi, Radio RPA (@rugbob78), Radio Humura, Radio Isanganiro, Radio Inkinzo, Radio Peace FM. STRICT RULES: (1) Maximum 1 article per source - do not use same source twice. (2) No duplicate topics - each article must cover a different subject. (3) Prioritize variety across all sources listed. (4) If less than 10 found in 7 days, include most recent available. Return the JSON.'
       }]
     })
   });
@@ -72,7 +72,7 @@ async function fetchNews() {
     addLog('Envoi demande JSON...', 'info');
 
     var messages2 = [
-      { role: 'user', content: 'Search for the 6 most recent Burundi news articles published in the last 7 days in French OR Kirundi from iwacu-burundi.org, pnininahazwe on X, FOCODE_ on X, SOSMediasBDI on X, King Umurundi Freedom (@KUF_ASBL on X), RFI Afrique Burundi, BBC Afrique Burundi, Radio RPA (@rugbob78), Radio Humura, Radio Isanganiro, Radio Inkinzo, Radio Peace FM. If no articles from last 7 days, use most recent available. Then return the JSON.' },
+      { role: 'user', content: 'Search for 10 to 12 recent Burundi news articles published in the last 7 days in French OR Kirundi from iwacu-burundi.org, pnininahazwe on X, FOCODE_ on X, SOSMediasBDI on X, King Umurundi Freedom (@KUF_ASBL on X), RFI Afrique Burundi, BBC Afrique Burundi, Radio RPA (@rugbob78), Radio Humura, Radio Isanganiro, Radio Inkinzo, Radio Peace FM. STRICT RULES: (1) Maximum 1 article per source - do not use same source twice. (2) No duplicate topics - each article must cover a different subject. (3) Prioritize variety across all sources listed. (4) If less than 10 found in 7 days, include most recent available. Return the JSON.' },
       { role: 'assistant', content: data.content }
     ];
 
@@ -83,7 +83,7 @@ async function fetchNews() {
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 2000,
         messages: messages2,
-        system: 'Return ONLY valid JSON in this format, no other text: {"articles":[{"id":"1","titre":"title in French or Kirundi","resume":"summary in French or Kirundi","source":"source","handle":"@handle","url":"url or null","langue":"fr or rn","categorie":"politique","date":"date"}]}'
+        system: 'Return ONLY valid JSON with 10-12 articles. Each article must be from a DIFFERENT source and cover a DIFFERENT topic. No duplicate sources, no duplicate subjects: {"articles":[{"id":"1","titre":"title in French or Kirundi","resume":"summary in French or Kirundi","source":"source","handle":"@handle","url":"url or null","langue":"fr or rn","categorie":"politique","date":"date"}]}'
       })
     });
 
