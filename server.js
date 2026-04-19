@@ -5,7 +5,7 @@ const PORT = process.env.PORT || 3000;
 const BOT_TOKEN = process.env.BOT_TOKEN || '8668406284:AAEbopVYNUdb6ZbJTwFZF_LMH7xiFs9pcXg';
 const CHANNEL = process.env.CHANNEL || '@BurundiInforama';
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
-const INTERVAL_HOURS = parseInt(process.env.INTERVAL_HOURS || '1');
+const INTERVAL_HOURS = parseFloat(process.env.INTERVAL_HOURS || '1');
 
 var postedTitles = [];
 var totalPosted = 0;
@@ -31,30 +31,34 @@ async function fetchNews() {
     'x-api-key': ANTHROPIC_KEY
   };
 
+  var today = new Date().toDateString();
+  var weekAgo = new Date(Date.now() - 7*24*60*60*1000).toDateString();
+
+  // Short focused search prompt to avoid rate limits
+  var searchPrompt = 'Today: ' + today + '. Find 8 recent Burundi news articles in French or Kirundi from 2026 only (after ' + weekAgo + '). Sources: iwacu-burundi.org, pnininahazwe X, FOCODE_ X, SOSMediasBDI X, KUF_ASBL X, RTNBurundi X, BurundiGov X, RFI Afrique, BBC Afrique. Different sources, different topics only.';
+
   // Step 1: Web search
   var searchRes = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: headers,
     body: JSON.stringify({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 2000,
+      max_tokens: 1500,
       tools: [{ type: 'web_search_20250305', name: 'web_search' }],
-      messages: [{
-        role: 'user',
-        content: 'Today is ' + new Date().toDateString() + '. Search for Burundi news in French or Kirundi published in the last 7 days (after ' + new Date(Date.now() - 7*24*60*60*1000).toDateString() + ') from: iwacu-burundi.org, pnininahazwe on X, FOCODE_ on X, SOSMediasBDI on X, KUF_ASBL on X, RFI Afrique Burundi, BBC Afrique Burundi, Radio RPA rugbob78, Radio Isanganiro, Radio Humura, @ntarehouse, @RTNBurundi, @GeneralNeva, @Baratuza2000, @RT_Isanganiro, @kwaNtare, @BurundiGov, @nshingamateka. ONLY include articles published in 2026. Ignore anything from 2025 or earlier. Find 8 different articles from different sources.'
-      }]
+      messages: [{ role: 'user', content: searchPrompt }]
     })
   });
 
   addLog('Status: ' + searchRes.status, 'info');
   var searchData = await searchRes.json();
   if (searchData.error) { addLog('Erreur: ' + searchData.error.message.substring(0, 60), 'err'); return []; }
+  addLog('Web search OK!', 'ok');
 
-  // Step 2: Extract JSON - strict prompt
+  // Step 2: Get JSON
   var messages = [
-    { role: 'user', content: 'Today is ' + new Date().toDateString() + '. Search for Burundi news in French or Kirundi published in the last 7 days (after ' + new Date(Date.now() - 7*24*60*60*1000).toDateString() + ') from: iwacu-burundi.org, pnininahazwe on X, FOCODE_ on X, SOSMediasBDI on X, KUF_ASBL on X, RFI Afrique Burundi, BBC Afrique Burundi, Radio RPA rugbob78, Radio Isanganiro, Radio Humura, @ntarehouse, @RTNBurundi, @GeneralNeva, @Baratuza2000, @RT_Isanganiro, @kwaNtare, @BurundiGov, @nshingamateka. ONLY include articles published in 2026. Ignore anything from 2025 or earlier. Find 8 different articles from different sources.' },
+    { role: 'user', content: searchPrompt },
     { role: 'assistant', content: searchData.content },
-    { role: 'user', content: 'Now output ONLY a JSON object. No explanations. No text before or after. Start with { and end with }. Use this exact format: {"articles":[{"id":"1","titre":"title","resume":"summary in French max 2 sentences","source":"source","handle":"@x","url":null,"langue":"fr","categorie":"politique","date":"date"}]}. Include max 8 articles. Keep each resume under 100 characters.' }
+    { role: 'user', content: 'Output ONLY JSON, nothing else. Start with { end with }: {"articles":[{"id":"1","titre":"title","resume":"max 80 char summary in French","source":"name","handle":"@x","url":null,"langue":"fr","categorie":"politique","date":"date"}]}' }
   ];
 
   var jsonRes = await fetch('https://api.anthropic.com/v1/messages', {
@@ -62,7 +66,7 @@ async function fetchNews() {
     headers: headers,
     body: JSON.stringify({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 3000,
+      max_tokens: 2000,
       messages: messages
     })
   });
@@ -77,16 +81,14 @@ async function fetchNews() {
 
   addLog('Recu: ' + raw.substring(0, 80), 'info');
 
-  // Find JSON in response
   var start = raw.indexOf('{');
   var end = raw.lastIndexOf('}');
   if (start === -1 || end === -1) { addLog('Pas de JSON', 'err'); return []; }
 
-  var jsonStr = raw.substring(start, end + 1);
   try {
-    var parsed = JSON.parse(jsonStr);
+    var parsed = JSON.parse(raw.substring(start, end + 1));
     var articles = parsed.articles || [];
-    addLog(articles.length + ' articles trouves!', articles.length > 0 ? 'ok' : 'err');
+    addLog(articles.length + ' articles!', articles.length > 0 ? 'ok' : 'err');
     return articles;
   } catch (e) {
     addLog('Erreur JSON: ' + e.message.substring(0, 60), 'err');
