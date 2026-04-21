@@ -1,11 +1,6 @@
 const express = require('express');
 const app = express();
-const fs = require('fs');
-const PORT = process.env.PORT || 3000;
-
-const BOT_TOKEN = process.env.BOT_TOKEN || '8668406284:AAEbopVYNUdb6ZbJTwFZF_LMH7xiFs9pcXg';
-const CHANNEL = process.env.CHANNEL || '@BurundiInforama';
-const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
+const fs 
 const INTERVAL_HOURS = parseFloat(process.env.INTERVAL_HOURS || '1');
 
 // --- FACEBOOK CONFIG ---
