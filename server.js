@@ -79,13 +79,15 @@ async function getRecentPostedUrls() {
 
 // --- DATE CHECK: reject articles older than 3 days ---
 function isWithin3Days(dateStr) {
-  if (!dateStr) return false;
+  // If no date, allow through
+  if (!dateStr) return true;
+  
   try {
     const d = new Date(dateStr);
-    if (isNaN(d)) return false;
+    if (isNaN(d)) return true;
     const diff = (Date.now() - d.getTime()) / (1000 * 60 * 60 * 24);
-    return diff >= 0 && diff <= 3;
-  } catch (e) { return false; }
+    return diff >= -1 && diff <= 3;
+  } catch (e) { return true; }
 }
 
 // --- FETCH NEWS ---
