@@ -1,374 +1,258 @@
 const express = require('express');
 const app = express();
-const { Client } = require('pg');
+const fs = require('fs');
 const PORT = process.env.PORT || 3000;
 
-// --- CONFIG ---
 const BOT_TOKEN = process.env.BOT_TOKEN || '8668406284:AAEbopVYNUdb6ZbJTwFZF_LMH7xiFs9pcXg';
 const CHANNEL = process.env.CHANNEL || '@BurundiInforama';
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
 const INTERVAL_HOURS = parseFloat(process.env.INTERVAL_HOURS || '1');
+
+// --- FACEBOOK CONFIG ---
 const FB_PAGE_ID = process.env.FB_PAGE_ID;
 const FB_ACCESS_TOKEN = process.env.FB_ACCESS_TOKEN;
-const DATABASE_URL = process.env.DATABASE_URL;
 
-// --- LOGGING ---
-let logs = [];
-let totalPosted = 0;
-let lastRun = null;
-let nextRun = null;
-let lastResult = 'En attente...';
+// --- PERSISTENT STORAGE ---
+const TITLES_FILE = '/tmp/posted_titles.json';
+const MAX_TITLES = 200;
 
-function addLog(msg, type = '') {
-  const t = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  logs.unshift({ time: t, msg, type });
-  if (logs.length > 150) logs.pop();
-  console.log(`[${t}] ${msg}`);
-}
-
-// --- DATABASE SETUP ---
-async function getDb() {
-  const client = new Client({
-    connectionString: DATABASE_URL,
-    ssl: { rejectUnauthorized: false }
-  });
-  await client.connect();
-  return client;
-}
-
-async function setupDb() {
-  const db = await getDb();
-  await db.query(`
-    CREATE TABLE IF NOT EXISTS posted_articles (
-      id SERIAL PRIMARY KEY,
-      url TEXT UNIQUE NOT NULL,
-      titre TEXT,
-      posted_at TIMESTAMP DEFAULT NOW()
-    )
-  `);
-  await db.end();
-  addLog('Base de donnees OK', 'ok');
-}
-
-async function isPosted(url) {
-  if (!url) return true;
-  const db = await getDb();
-  const res = await db.query('SELECT 1 FROM posted_articles WHERE url = $1', [url]);
-  await db.end();
-  return res.rowCount > 0;
-}
-
-async function markPosted(url, titre) {
-  if (!url) return;
-  const db = await getDb();
-  await db.query(
-    'INSERT INTO posted_articles (url, titre) VALUES ($1, $2) ON CONFLICT (url) DO NOTHING',
-    [url, titre]
-  );
-  await db.end();
-}
-
-async function getRecentPostedUrls() {
-  const db = await getDb();
-  const res = await db.query(
-    'SELECT url FROM posted_articles ORDER BY posted_at DESC LIMIT 50'
-  );
-  await db.end();
-  return res.rows.map(r => r.url);
-}
-
-// --- DATE CHECK: reject articles older than 3 days ---
-function isWithin3Days(dateStr) {
-  // If no date, allow through
-  if (!dateStr) return true;
-  
+function loadPostedTitles() {
   try {
-    const d = new Date(dateStr);
-    if (isNaN(d)) return true;
-    const diff = (Date.now() - d.getTime()) / (1000 * 60 * 60 * 24);
-    return diff >= -1 && diff <= 3;
-  } catch (e) { return true; }
+    if (fs.existsSync(TITLES_FILE)) {
+      var data = fs.readFileSync(TITLES_FILE, 'utf8');
+      return JSON.parse(data);
+    }
+  } catch (e) {
+    console.log('Could not load titles file:', e.message);
+  }
+  return [];
 }
 
-// --- FETCH NEWS ---
+function savePostedTitles(titles) {
+  try {
+    var trimmed = titles.slice(-MAX_TITLES);
+    fs.writeFileSync(TITLES_FILE, JSON.stringify(trimmed));
+  } catch (e) {
+    console.log('Could not save titles file:', e.message);
+  }
+}
+
+var postedTitles = loadPostedTitles();
+var totalPosted = 0;
+var lastRun = null;
+var nextRun = null;
+var logs = [];
+
+function addLog(msg, type) {
+  if (!type) type = '';
+  var t = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  logs.unshift({ time: t, msg: msg, type: type });
+  if (logs.length > 100) logs.pop();
+  console.log('[' + t + '] ' + msg);
+}
+
 async function fetchNews() {
+  addLog('Recherche live...', 'info');
   if (!ANTHROPIC_KEY) { addLog('CLE API MANQUANTE!', 'err'); return []; }
 
-  const today = new Date();
-  const todayStr = today.toISOString().split('T')[0];
-  const minus3 = new Date(today - 3 * 86400000).toISOString().split('T')[0];
-
-  const headers = {
+  var headers = {
     'Content-Type': 'application/json',
     'anthropic-version': '2023-06-01',
     'x-api-key': ANTHROPIC_KEY
   };
 
-  // Get already-posted URLs from DB to tell the AI to avoid them
-  const recentUrls = await getRecentPostedUrls();
-  const avoidBlock = recentUrls.length > 0
-    ? `\nDo NOT include any article from these URLs (already posted):\n${recentUrls.join('\n')}`
-    : '';
+  var today = new Date().toDateString();
 
-  const prompt = `Today is ${todayStr}. Search for recent Burundi news articles from the last 3 days (since ${minus3}).
+  var res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: headers,
+    body: JSON.stringify({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 2000,
+      system: 'You are a Burundi news collector. After searching, respond ONLY with a valid JSON object starting with { and ending with }. No other text. Format: {"articles":[{"id":"1","titre":"title","resume":"short summary in French max 80 chars","source":"name","handle":"@x","url":null,"langue":"fr","categorie":"politique","date":"date"}]}',
+      tools: [{ type: 'web_search_20250305', name: 'web_search' }],
+      messages: [{
+        role: 'user',
+        content: 'Today is ' + today + '. Search for 6 recent Burundi news articles from 2026 in French or Kirundi from these sources: iwacu-burundi.org, pnininahazwe on X, FOCODE_ on X, SOSMediasBDI on X, RFI Afrique Burundi, BBC Afrique Burundi. Each article must be from a different source. Return only the JSON.'
+      }]
+    })
+  });
 
-Search these sources and return as many recent articles as you can find (between 1 and 8):
-- FRENCH sources: iwacu-burundi.org, SOSMediasBDI on X, FOCODE_ on X, RFI Afrique, BBC Afrique, Kaburahe on X, Rugurika on X, RTNBurundi on X
-- KIRUNDI sources: kwaNtare on X, nshingamateka on X, RT_Isanganiro on X, Pacifique Nininahazwe Facebook (facebook.com/pacininahazwe), Baratuza2000 on X
+  addLog('Status: ' + res.status, 'info');
+  var data = await res.json();
 
-Rules:
-- Include ONLY articles with a real URL starting with http
-- Include at least 1 Kirundi article if available
-- Do NOT worry if you cannot find many — return whatever you find
-- Do NOT return an error message — always return JSON even with 1 article
-- ONLY French or Kirundi articles — NO English articles at all${avoidBlock}
+  if (data.error) {
+    addLog('Erreur: ' + data.error.message.substring(0, 80), 'err');
+    return [];
+  }
 
-Return ONLY valid JSON, no markdown, no explanation:
-{"articles":[{"titre":"...","resume":"max 100 chars in original language","source":"...","handle":"@...","url":"https://...","langue":"fr or rn","categorie":"politique/economie/societe/droits/sport","date":"YYYY-MM-DD"}]}`;
+  var raw = '';
+  if (data.content) {
+    for (var i = 0; i < data.content.length; i++) {
+      if (data.content[i].type === 'text') raw += data.content[i].text;
+    }
+  }
 
-  addLog('Recherche articles (3 derniers jours)...', 'info');
+  addLog('Recu: ' + raw.substring(0, 100), 'info');
 
-  let raw = '';
+  if (!raw || raw.trim().length < 5) {
+    addLog('Envoi suivi...', 'info');
 
-  try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
+    var followMessages = [
+      { role: 'user', content: 'Today is ' + today + '. Search for 6 recent Burundi news articles from 2026 in French or Kirundi from these sources: iwacu-burundi.org, pnininahazwe on X, FOCODE_ on X, SOSMediasBDI on X, RFI Afrique Burundi, BBC Afrique Burundi. Each article must be from a different source. Return only the JSON.' },
+      { role: 'assistant', content: data.content },
+      { role: 'user', content: 'Now respond with ONLY the JSON object. Start with { and end with }. No explanation.' }
+    ];
+
+    var res2 = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers,
+      headers: headers,
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
-        max_tokens: 2000,
-        system: 'You are a Burundi news collector. Use web_search to find real recent articles. ONLY return articles written in French or Kirundi — NEVER in English. Respond ONLY with valid JSON — no explanation, no markdown, no text before or after.',
-        tools: [{ type: 'web_search_20250305', name: 'web_search' }],
-        messages: [{ role: 'user', content: prompt }]
+        max_tokens: 1500,
+        system: 'Respond ONLY with valid JSON. No text before or after. Format: {"articles":[{"id":"1","titre":"title","resume":"summary","source":"name","handle":"@x","url":null,"langue":"fr","categorie":"politique","date":"date"}]}',
+        messages: followMessages
       })
     });
 
-    const data = await res.json();
-    if (data.error) { addLog('API Err: ' + data.error.message.substring(0, 80), 'err'); return []; }
-    addLog('Status: ' + res.status, 'info');
-
-    for (const block of (data.content || [])) {
-      if (block.type === 'text') raw += block.text;
-    }
-
-    // Follow-up if model only searched but didn't respond with text
-    if (!raw || raw.trim().length < 10) {
-      addLog('Suivi requis...', 'info');
-      const res2 = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          model: 'claude-haiku-4-5-20251001',
-          max_tokens: 2000,
-          system: 'Respond ONLY with valid JSON. No markdown, no explanation.',
-          messages: [
-            { role: 'user', content: prompt },
-            { role: 'assistant', content: data.content },
-            { role: 'user', content: 'Now write ONLY the JSON. Start with { end with }. No other text.' }
-          ]
-        })
-      });
-      const data2 = await res2.json();
-      for (const block of (data2.content || [])) {
-        if (block.type === 'text') raw += block.text;
+    var data2 = await res2.json();
+    raw = '';
+    if (data2.content) {
+      for (var j = 0; j < data2.content.length; j++) {
+        if (data2.content[j].type === 'text') raw += data2.content[j].text;
       }
     }
-  } catch (e) {
-    addLog('Fetch error: ' + e.message, 'err');
+    addLog('Suivi recu: ' + raw.substring(0, 100), 'info');
+  }
+
+  var start = raw.indexOf('{');
+  var end = raw.lastIndexOf('}');
+  if (start === -1 || end === -1) {
+    addLog('Pas de JSON dans: ' + raw.substring(0, 60), 'err');
     return [];
   }
 
-  // Parse JSON
-  const start = raw.indexOf('{');
-  const end = raw.lastIndexOf('}');
-  if (start === -1 || end === -1) { addLog('Pas de JSON recu', 'err'); return []; }
-
-  let articles = [];
   try {
-    const parsed = JSON.parse(raw.substring(start, end + 1));
-    articles = parsed.articles || [];
+    var parsed = JSON.parse(raw.substring(start, end + 1));
+    var articles = parsed.articles || [];
+    addLog(articles.length + ' articles!', articles.length > 0 ? 'ok' : 'err');
+    return articles;
   } catch (e) {
-    addLog('JSON parse error: ' + e.message.substring(0, 60), 'err');
+    addLog('Erreur JSON: ' + e.message.substring(0, 60), 'err');
     return [];
   }
-
-  addLog(`${articles.length} articles recus`, articles.length > 0 ? 'ok' : '');
-
-  // --- FILTER: remove old, no-URL, or already-posted articles ---
-  const fresh = [];
-  for (const a of articles) {
-    if (!a.url || !a.url.startsWith('http')) {
-      addLog(`Ignore (pas d'URL): ${(a.titre || '').substring(0, 40)}`, '');
-      continue;
-    }
-    if (!isWithin3Days(a.date)) {
-      addLog(`Ignore (trop vieux: ${a.date}): ${(a.titre || '').substring(0, 35)}`, '');
-      continue;
-    }
-    const posted = await isPosted(a.url);
-    if (posted) {
-      addLog(`Ignore (DB deja poste): ${(a.titre || '').substring(0, 35)}`, '');
-      continue;
-    }
-    fresh.push(a);
-  }
-
-  addLog(`${fresh.length} nouveaux apres filtrage DB`, fresh.length > 0 ? 'ok' : '');
-  return fresh;
 }
 
-// --- BUILD MESSAGES ---
-function buildTelegramMessage(a) {
-  const cats = { politique: '🏛️', droits: '✊', economie: '💰', societe: '🌍', sport: '⚽' };
-  const cat = cats[a.categorie] || '📰';
-  const langTag = a.langue === 'rn' ? ' 🇧🇮 [Kirundi]' : '';
-  let msg = `${cat}${langTag} ${a.titre || ''}\n\n${a.resume || ''}\n\nSource: ${a.source || ''}`;
-  if (a.handle) msg += ` ${a.handle}`;
-  if (a.date) msg += `\n📅 ${a.date}`;
-  if (a.url) msg += `\n🔗 ${a.url}`;
-  msg += `\n\n#Burundi #Actualites\nCanal: @BurundiInforama`;
+function buildMessage(a) {
+  var cats = { politique: '🏛️', droits: '✊', economie: '💰', societe: '🌍', sport: '⚽' };
+  var cat = cats[a.categorie] || '📰';
+  var msg = cat + ' ' + (a.titre || '') + '\n\n' + (a.resume || '') + '\n\nSource: ' + (a.source || '');
+  if (a.handle) msg += ' ' + a.handle;
+  if (a.date) msg += '\n' + a.date;
+  if (a.url) msg += '\n' + a.url;
+  msg += '\n\n#Burundi #Actualites\nCanal: @BurundiInforama';
   return msg;
 }
 
 function buildFacebookMessage(a) {
-  const cats = { politique: '🏛️', droits: '✊', economie: '💰', societe: '🌍', sport: '⚽' };
-  const cat = cats[a.categorie] || '📰';
-  const langTag = a.langue === 'rn' ? ' 🇧🇮 [Kirundi]' : '';
-  let msg = `${cat}${langTag} ${a.titre || ''}\n\n${a.resume || ''}\n\nSource: ${a.source || ''}`;
-  if (a.handle) msg += ` ${a.handle}`;
-  if (a.date) msg += `\n📅 ${a.date}`;
-  if (a.url) msg += `\n🔗 ${a.url}`;
-  msg += `\n\n#Burundi #Actualites #BurundiInforama`;
+  var cats = { politique: '🏛️', droits: '✊', economie: '💰', societe: '🌍', sport: '⚽' };
+  var cat = cats[a.categorie] || '📰';
+  var msg = cat + ' ' + (a.titre || '') + '\n\n' + (a.resume || '') + '\n\nSource: ' + (a.source || '');
+  if (a.handle) msg += ' ' + a.handle;
+  if (a.date) msg += '\n' + a.date;
+  if (a.url) msg += '\n\n🔗 ' + a.url;
+  msg += '\n\n#Burundi #Actualites #BurundiInforama';
   return msg;
 }
 
-// --- POST TO TELEGRAM ---
 async function postToTelegram(article) {
-  const text = buildTelegramMessage(article);
-  const r = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+  var text = buildMessage(article);
+  var r = await fetch('https://api.telegram.org/bot' + BOT_TOKEN + '/sendMessage', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: CHANNEL, text, disable_web_page_preview: false })
+    body: JSON.stringify({ chat_id: CHANNEL, text: text, disable_web_page_preview: false })
   });
-  const d = await r.json();
+  var d = await r.json();
   if (d.ok) {
-    await markPosted(article.url, article.titre);
+    postedTitles.push(article.titre);
+    savePostedTitles(postedTitles);
     totalPosted++;
-    addLog(`✅ Telegram: ${(article.titre || '').substring(0, 50)}`, 'ok');
-    return true;
+    addLog('Poste Telegram: ' + (article.titre || '').substring(0, 50), 'ok');
   } else {
-    addLog(`❌ Telegram: ${d.description}`, 'err');
-    return false;
+    addLog('Erreur Telegram: ' + d.description, 'err');
   }
 }
 
-// --- POST TO FACEBOOK ---
 async function postToFacebook(article) {
-  if (!FB_PAGE_ID || !FB_ACCESS_TOKEN) return;
-  const text = buildFacebookMessage(article);
-  const body = { message: text, access_token: FB_ACCESS_TOKEN };
+  if (!FB_PAGE_ID || !FB_ACCESS_TOKEN) {
+    addLog('Facebook: config manquante (FB_PAGE_ID ou FB_ACCESS_TOKEN)', 'err');
+    return;
+  }
+  var text = buildFacebookMessage(article);
+  var url = 'https://graph.facebook.com/v19.0/' + FB_PAGE_ID + '/feed';
+  var body = { message: text, access_token: FB_ACCESS_TOKEN };
   if (article.url) body.link = article.url;
-  const r = await fetch(`https://graph.facebook.com/v19.0/${FB_PAGE_ID}/feed`, {
+
+  var r = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body)
   });
-  const d = await r.json();
+  var d = await r.json();
   if (d.id) {
-    addLog(`✅ Facebook: ${(article.titre || '').substring(0, 50)}`, 'ok');
+    addLog('Poste Facebook: ' + (article.titre || '').substring(0, 50), 'ok');
   } else {
-    addLog(`❌ Facebook: ${JSON.stringify(d).substring(0, 80)}`, 'err');
+    addLog('Erreur Facebook: ' + JSON.stringify(d).substring(0, 80), 'err');
   }
 }
 
-function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+function sleep(ms) { return new Promise(function(r) { setTimeout(r, ms); }); }
 
-// --- MAIN CYCLE ---
 async function runCycle() {
   lastRun = new Date().toLocaleString('fr-FR');
   nextRun = new Date(Date.now() + INTERVAL_HOURS * 3600000).toLocaleString('fr-FR');
-  addLog('━━━ Nouveau cycle ━━━', 'info');
-
+  addLog('--- Cycle demarre ---', 'info');
   try {
-    const articles = await fetchNews();
-
-    if (articles.length === 0) {
-      lastResult = 'Rien de nouveau';
-      addLog('Rien de nouveau — aucun post', 'info');
-      return;
+    var articles = await fetchNews();
+    var fresh = [];
+    for (var i = 0; i < articles.length; i++) {
+      if (postedTitles.indexOf(articles[i].titre) === -1) fresh.push(articles[i]);
     }
-
-    lastResult = `${articles.length} nouveaux articles`;
-    for (const article of articles) {
-      const posted = await postToTelegram(article);
+    addLog(articles.length + ' articles, ' + fresh.length + ' nouveaux', fresh.length > 0 ? 'ok' : '');
+    for (var j = 0; j < fresh.length; j++) {
+      await postToTelegram(fresh[j]);
       await sleep(2000);
-      if (posted) await postToFacebook(article);
-      await sleep(3000);
+      await postToFacebook(fresh[j]);
+      await sleep(2000);
     }
+    if (fresh.length === 0) addLog('Aucun nouvel article', '');
   } catch (e) {
-    addLog('Erreur cycle: ' + e.message, 'err');
+    addLog('Erreur: ' + e.message, 'err');
   }
 }
 
-async function start() {
-  addLog('🇧🇮 BURUNDI INFORAMA DEMARRE', 'ok');
-  addLog(`API: ${ANTHROPIC_KEY ? 'OK' : 'MANQUANTE!'}`, ANTHROPIC_KEY ? 'ok' : 'err');
-  addLog(`DB: ${DATABASE_URL ? 'OK' : 'MANQUANTE!'}`, DATABASE_URL ? 'ok' : 'err');
-  addLog(`Facebook: ${FB_PAGE_ID && FB_ACCESS_TOKEN ? 'OK' : 'Non configure'}`, FB_PAGE_ID && FB_ACCESS_TOKEN ? 'ok' : 'err');
-  addLog(`Intervalle: ${INTERVAL_HOURS}h`, 'info');
-
-  if (!DATABASE_URL) {
-    addLog('DATABASE_URL manquante! Ajoutez-la dans Render env vars.', 'err');
-    return;
-  }
-
-  await setupDb();
+async function startScheduler() {
+  addLog('BURUNDI INFORAMA demarre sur ' + CHANNEL, 'ok');
+  addLog('Cle API: ' + (ANTHROPIC_KEY ? 'OK' : 'MANQUANTE!'), ANTHROPIC_KEY ? 'ok' : 'err');
+  addLog('Facebook: ' + (FB_PAGE_ID && FB_ACCESS_TOKEN ? 'OK' : 'Non configure'), FB_PAGE_ID && FB_ACCESS_TOKEN ? 'ok' : 'err');
+  addLog('Titres en memoire: ' + postedTitles.length, 'info');
+  addLog('Intervalle: ' + INTERVAL_HOURS + 'h', 'info');
   await runCycle();
   setInterval(runCycle, INTERVAL_HOURS * 3600000);
 }
 
-// --- DASHBOARD ---
-app.get('/', (req, res) => {
-  const logHtml = logs.map(l =>
-    `<div class="log ${l.type}">[${l.time}] ${l.msg}</div>`
-  ).join('');
-  res.send(`<!DOCTYPE html>
-<html><head>
-<meta charset="UTF-8">
-<meta http-equiv="refresh" content="30">
-<title>BURUNDI INFORAMA</title>
-<style>
-  body{background:#08090a;color:#eef0ee;font-family:monospace;padding:16px;max-width:900px;margin:0 auto}
-  h1{color:#00e676;font-size:1.2rem}
-  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:16px 0}
-  .card{background:#111314;border:1px solid #252829;border-radius:8px;padding:14px;text-align:center}
-  .num{font-size:1.8rem;font-weight:700}
-  .lbl{font-size:0.6rem;color:#6c7370;text-transform:uppercase;margin-top:4px}
-  .box{background:#111314;border:1px solid #252829;border-radius:8px;padding:14px;margin-bottom:12px}
-  .badge{background:rgba(0,230,118,0.1);border:1px solid rgba(0,230,118,0.3);color:#00e676;border-radius:20px;padding:4px 12px;font-size:0.75rem;display:inline-block}
-  .log{font-size:0.72rem;padding:2px 0;color:#6c7370}
-  .ok{color:#00e676}.err{color:#ff5252}.info{color:#40c4ff}
-  .sub{font-size:0.65rem;color:#6c7370}
-</style>
-</head><body>
-<h1>🇧🇮 BURUNDI INFORAMA</h1>
-<p class="sub">@BurundiInforama · auto-refresh 30s</p>
-<div class="grid">
-  <div class="card"><div class="num" style="color:#00e676">${totalPosted}</div><div class="lbl">Postés</div></div>
-  <div class="card"><div class="num" style="color:#40c4ff">${INTERVAL_HOURS}h</div><div class="lbl">Intervalle</div></div>
-  <div class="card"><div class="num" style="color:#ffd740;font-size:0.65rem">${lastRun || '-'}</div><div class="lbl">Dernier</div></div>
-</div>
-<div class="box"><p class="sub">DERNIER RÉSULTAT</p><span class="badge">${lastResult}</span></div>
-<div class="box"><p class="sub">PROCHAIN CYCLE</p><span class="badge">${nextRun || 'En attente...'}</span></div>
-<div class="box"><p class="sub">JOURNAL</p>${logHtml || '<div class="log">Aucune activité</div>'}</div>
-</body></html>`);
+app.get('/', function(req, res) {
+  var logHtml = logs.map(function(l) {
+    return '<div class="log ' + l.type + '">[' + l.time + '] ' + l.msg + '</div>';
+  }).join('');
+  res.send('<!DOCTYPE html><html><head><meta charset="UTF-8"><meta http-equiv="refresh" content="30"><title>BURUNDI INFORAMA</title><style>body{background:#08090a;color:#eef0ee;font-family:sans-serif;padding:16px}h1{color:#00e676}.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:16px 0}.stat{background:#111314;border:1px solid #252829;border-radius:10px;padding:14px;text-align:center}.n{font-size:1.8rem;font-weight:700}.l{font-size:0.65rem;color:#6c7370;text-transform:uppercase;margin-top:4px}.box{background:#111314;border:1px solid #252829;border-radius:10px;padding:14px;margin-bottom:14px}.log{font-size:0.75rem;font-family:monospace;padding:3px 0;color:#6c7370}.ok{color:#00e676}.err{color:#ff5252}.info{color:#40c4ff}.badge{background:rgba(0,230,118,0.1);border:1px solid rgba(0,230,118,0.3);color:#00e676;border-radius:20px;padding:4px 12px;font-size:0.75rem}</style></head><body><h1>🇧🇮 BURUNDI INFORAMA</h1><p style="color:#6c7370">@BurundiInforama · refresh 30s</p><div class="stats"><div class="stat"><div class="n" style="color:#00e676">' + totalPosted + '</div><div class="l">Postes</div></div><div class="stat"><div class="n" style="color:#40c4ff">' + INTERVAL_HOURS + 'h</div><div class="l">Intervalle</div></div><div class="stat"><div class="n" style="color:#ffd740;font-size:0.7rem">' + (lastRun||'-') + '</div><div class="l">Dernier</div></div></div><div class="box"><p style="color:#6c7370;font-size:0.75rem">PROCHAIN POST</p><span class="badge">' + (nextRun||'En attente...') + '</span></div><div class="box"><p style="color:#6c7370;font-size:0.75rem">JOURNAL</p>' + (logHtml||'<div class="log">Aucune activite</div>') + '</div></body></html>');
 });
 
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok', totalPosted, lastRun, nextRun, lastResult });
+app.get('/health', function(req, res) {
+  res.json({ status: 'ok', totalPosted: totalPosted, lastRun: lastRun, nextRun: nextRun, postedTitlesCount: postedTitles.length });
 });
 
-app.listen(PORT, () => {
-  console.log(`Server on port ${PORT}`);
-  start();
+app.listen(PORT, function() {
+  console.log('Server running on port ' + PORT);
+  startScheduler();
 });
