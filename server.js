@@ -36,6 +36,19 @@ async function getDb() {
   return client;
 }
 
+async function cleanOldArticles() {
+  try {
+    const db = await getDb();
+    const result = await db.query(
+      "DELETE FROM posted_articles WHERE posted_at < NOW() - INTERVAL '3 days'"
+    );
+    await db.end();
+    addLog(`DB nettoyee: ${result.rowCount} anciens articles supprimes`, 'info');
+  } catch (e) {
+    addLog('Erreur nettoyage DB: ' + e.message, 'err');
+  }
+}
+
 async function setupDb() {
   const db = await getDb();
   await db.query(`
@@ -145,7 +158,7 @@ async function fetchNews() {
   const GROUPS = [
     {
       label: 'Groupe 1 (Iwacu/SOS/FOCODE/Kaburahe/Rugurika/yigenga)',
-      sources: 'iwacu-burundi.org, SOSMediasBDI on X, FOCODE_ on X, Kaburahe on X, Rugurika on X, pnininahazwe on X, yigenga on X'
+      sources: 'iwacu-burundi.org, SOSMediasBDI on X, FOCODE_ on X, Kaburahe on X, Rugurika on X, pnininahazwe on X, yigenga on X, radio_rpa on X, rpa.bi'
     },
     {
       label: 'Groupe 2 (Rugurika/RTN/kwaNtare/nshingamateka/Nininahazwe/Baratuza)',
@@ -252,9 +265,12 @@ Return ONLY valid JSON:
       addLog(`Ignore (pas d'URL): ${(a.titre || '').substring(0, 40)}`, '');
       continue;
     }
-    // Reject YouTube URLs — can't verify date and often old
-    if (a.url.includes('youtube.com') || a.url.includes('youtu.be')) {
-      addLog(`Ignore (YouTube non autorise): ${(a.titre || '').substring(0, 35)}`, '');
+    // Reject YouTube, RFI and BBC URLs
+    if (a.url.includes('youtube.com') || a.url.includes('youtu.be') ||
+        a.url.includes('rfi.fr') || a.url.includes('bbc.') ||
+        a.source?.toLowerCase().includes('rfi') ||
+        a.source?.toLowerCase().includes('bbc')) {
+      addLog(`Ignore (source non autorisee: ${a.source}): ${(a.titre || '').substring(0, 30)}`, '');
       continue;
     }
     // Reject if older than 3 days
@@ -385,6 +401,7 @@ async function start() {
   }
 
   await setupDb();
+  await cleanOldArticles();
   await runCycle();
   setInterval(runCycle, INTERVAL_HOURS * 3600000);
 }
