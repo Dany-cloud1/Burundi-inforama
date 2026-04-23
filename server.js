@@ -120,7 +120,8 @@ Rules:
 - Include ONLY articles with a real URL starting with http
 - Include at least 1 Kirundi article if available
 - Do NOT worry if you cannot find many — return whatever you find
-- Do NOT return an error message — always return JSON even with 1 article${avoidBlock}
+- Do NOT return an error message — always return JSON even with 1 article
+- ONLY French or Kirundi articles — NO English articles at all${avoidBlock}
 
 Return ONLY valid JSON, no markdown, no explanation:
 {"articles":[{"titre":"...","resume":"max 100 chars in original language","source":"...","handle":"@...","url":"https://...","langue":"fr or rn","categorie":"politique/economie/societe/droits/sport","date":"YYYY-MM-DD"}]}`;
@@ -136,7 +137,7 @@ Return ONLY valid JSON, no markdown, no explanation:
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 2000,
-        system: 'You are a Burundi news collector. Use web_search to find real recent articles. Respond ONLY with valid JSON — no explanation, no markdown, no text before or after.',
+        system: 'You are a Burundi news collector. Use web_search to find real recent articles. ONLY return articles written in French or Kirundi — NEVER in English. Respond ONLY with valid JSON — no explanation, no markdown, no text before or after.',
         tools: [{ type: 'web_search_20250305', name: 'web_search' }],
         messages: [{ role: 'user', content: prompt }]
       })
