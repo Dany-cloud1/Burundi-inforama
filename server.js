@@ -158,7 +158,7 @@ async function fetchNews() {
   const GROUPS = [
     {
       label: 'Groupe 1 (Iwacu/SOS/FOCODE/Kaburahe/Rugurika/yigenga)',
-      sources: 'iwacu-burundi.org, SOSMediasBDI on X, FOCODE_ on X, Kaburahe on X, Rugurika on X, pnininahazwe on X, yigenga on X, radio_rpa on X, rpa.bi'
+      sources: 'iwacu-burundi.org, SOSMediasBDI on X, FOCODE_ on X, Kaburahe on X, Rugurika on X, pnininahazwe on X, yigenga on X, radio_rpa on X, rpa.bi, KUF_ASBL on X'
     },
     {
       label: 'Groupe 2 (Rugurika/RTN/kwaNtare/nshingamateka/Nininahazwe/Baratuza)',
