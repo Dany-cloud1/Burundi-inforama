@@ -110,20 +110,19 @@ async function fetchNews() {
     ? `\nDo NOT include any article from these URLs (already posted):\n${recentUrls.join('\n')}`
     : '';
 
-  const prompt = `Today is ${todayStr}. Search for recent Burundi news articles published between ${minus3} and ${todayStr} (last 3 days only).
+  const prompt = `Today is ${todayStr}. Search for recent Burundi news articles from the last 3 days (since ${minus3}).
 
-Find 6 articles total:
-- 4 articles in FRENCH from: iwacu-burundi.org, SOSMediasBDI on X, FOCODE_ on X, RFI Afrique, BBC Afrique, Kaburahe on X, Rugurika on X, RTNBurundi on X
-- 2 articles in KIRUNDI from: kwaNtare on X, nshingamateka on X, RT_Isanganiro on X, Pacifique Nininahazwe Facebook (facebook.com/pacininahazwe), Baratuza2000 on X
+Search these sources and return as many recent articles as you can find (between 1 and 8):
+- FRENCH sources: iwacu-burundi.org, SOSMediasBDI on X, FOCODE_ on X, RFI Afrique, BBC Afrique, Kaburahe on X, Rugurika on X, RTNBurundi on X
+- KIRUNDI sources: kwaNtare on X, nshingamateka on X, RT_Isanganiro on X, Pacifique Nininahazwe Facebook (facebook.com/pacininahazwe), Baratuza2000 on X
 
 Rules:
-- Every article MUST have a real unique URL starting with http
-- Every article MUST be dated between ${minus3} and ${todayStr}
-- NO duplicate topics or URLs
-- Kirundi articles must be written in Kirundi language
-- Search thoroughly for the most recent articles${avoidBlock}
+- Include ONLY articles with a real URL starting with http
+- Include at least 1 Kirundi article if available
+- Do NOT worry if you cannot find many — return whatever you find
+- Do NOT return an error message — always return JSON even with 1 article${avoidBlock}
 
-Return ONLY valid JSON, no markdown:
+Return ONLY valid JSON, no markdown, no explanation:
 {"articles":[{"titre":"...","resume":"max 100 chars in original language","source":"...","handle":"@...","url":"https://...","langue":"fr or rn","categorie":"politique/economie/societe/droits/sport","date":"YYYY-MM-DD"}]}`;
 
   addLog('Recherche articles (3 derniers jours)...', 'info');
