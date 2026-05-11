@@ -33,7 +33,7 @@ const contentFormats = [
     emoji: '📰',
     label: 'ACTUALITÉ',
     searchPrompt: 'Trouve des actualités politiques ou sociales récentes et importantes du Burundi publiées dans les 3 derniers jours.',
-    sources: 'iwacu-burundi.org, SOSMediasBDI on X, FOCODE_ on X, Kaburahe on X, radio_rpa on X, rpa.bi, RT_Isanganiro on X',
+    sources: 'iwacu-burundi.org, SOSMediasBDI on X, FOCODE_ on X, focode.org, Kaburahe on X, radio_rpa on X, rpa.bi, RT_Isanganiro on X, pnininahazwe on X, ndondeza.org, HollyEude on X, rugbob78 on X, ABPInfos on X, abpinfo.bi, AndreNikwigize1 on X',
     langue: 'fr'
   },
   {
@@ -49,7 +49,7 @@ const contentFormats = [
     emoji: '💰',
     label: 'ÉCONOMIE',
     searchPrompt: 'Trouve des actualités économiques récentes sur le Burundi: prix du café burundais à l\'export, taux de change BRB, commerce EAC, investissements, ou budget national.',
-    sources: 'BRB_Burundi on X, OBRBurundi on X, ndondeza.org, iwacu-burundi.org économie, banquedelarepublique.bi',
+    sources: 'BRB_Burundi on X, OBRBurundi on X, ndondeza.org, pnininahazwe on X, AndreNikwigize1 on X, partners4peace.com, iwacu-burundi.org économie, banquedelarepublique.bi, ABPInfos on X, abpinfo.bi',
     langue: 'fr'
   },
   {
@@ -73,7 +73,7 @@ const contentFormats = [
     emoji: '🌿',
     label: 'PROVERBE KIRUNDI',
     searchPrompt: 'Trouve des proverbes traditionnels burundais authentiques en Kirundi avec leur traduction en français et leur explication culturelle.',
-    sources: 'proverbes kirundi burundi, sagesse burundaise, culture kirundi',
+    sources: 'proverbes kirundi burundi, sagesse burundaise, culture kirundi, pnininahazwe on X, FOCODE_ on X',
     langue: 'rn'
   },
   {
@@ -81,7 +81,7 @@ const contentFormats = [
     emoji: '🌍',
     label: 'DIASPORA',
     searchPrompt: 'Trouve des informations récentes pertinentes pour la communauté burundaise en diaspora: Belgique, France, Canada, USA — événements communautaires, transferts d\'argent, opportunités, ou nouvelles concernant les Burundais à l\'étranger.',
-    sources: 'diaspora burundaise europe, burundais belgique france, communaute burundaise canada',
+    sources: 'diaspora burundaise europe, burundais belgique france, communaute burundaise canada, pnininahazwe on X, HollyEude on X, AndreNikwigize1 on X, partners4peace.com',
     langue: 'fr'
   }
 ];
