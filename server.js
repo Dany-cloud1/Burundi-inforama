@@ -36,14 +36,7 @@ const contentFormats = [
     sources: 'iwacu-burundi.org, SOSMediasBDI on X, FOCODE_ on X, focode.org, Kaburahe on X, radio_rpa on X, rpa.bi, RT_Isanganiro on X, pnininahazwe on X, ndondeza.org, HollyEude on X, rugbob78 on X, ABPInfos on X, abpinfo.bi, AndreNikwigize1 on X, youtube.com/@TeleRenaissance, youtube.com/@radiopubliqueafricaineijwi55, radiopeacefm.com, UEauBurundi on X, eeas.europa.eu/burundi',
     langue: 'fr'
   },
-  {
-    type: 'SPORT',
-    emoji: '⚽',
-    label: 'SPORT',
-    searchPrompt: 'Trouve des actualités sportives récentes sur le Burundi: football (Vital\'O FC, Hawks FC, Athletico Olympic, équipe nationale Intamba mu rugamba), athlétisme, ou autre sport burundais.',
-    sources: 'X/Twitter: VitalOFC, HawksFC_Bdi, FBFBurundi, AthleticsBdi, sports burundi news, youtube.com/@TeleRenaissance, youtube.com/@radiopubliqueafricaineijwi55',
-    langue: 'fr'
-  },
+
   {
     type: 'ECONOMIE',
     emoji: '💰',
@@ -52,24 +45,10 @@ const contentFormats = [
     sources: 'BRB_Burundi on X, OBRBurundi on X, ndondeza.org, pnininahazwe on X, AndreNikwigize1 on X, partners4peace.com, iwacu-burundi.org économie, banquedelarepublique.bi, ABPInfos on X, abpinfo.bi, UEauBurundi on X, eeas.europa.eu/burundi',
     langue: 'fr'
   },
-  {
-    type: 'CULTURE',
-    emoji: '🎭',
-    label: 'CULTURE & SOCIÉTÉ',
-    searchPrompt: 'Partage des informations intéressantes sur la culture burundaise: musique traditionnelle, danse des tambours, art, festivals, personnalités culturelles, ou traditions burundaises.',
-    sources: 'culture burundi actualite, musique burundaise, tambours burundi, artistes burundais, youtube.com/@TeleRenaissance, youtube.com/@radiopubliqueafricaineijwi55, radiopeacefm.com',
-    langue: 'fr'
-  },
 
 
-  {
-    type: 'DIASPORA',
-    emoji: '🌍',
-    label: 'DIASPORA',
-    searchPrompt: 'Trouve des informations récentes pertinentes pour la communauté burundaise en diaspora: Belgique, France, Canada, USA — événements communautaires, transferts d\'argent, opportunités, ou nouvelles concernant les Burundais à l\'étranger.',
-    sources: 'diaspora burundaise europe, burundais belgique france, communaute burundaise canada, pnininahazwe on X, HollyEude on X, AndreNikwigize1 on X, partners4peace.com, UEauBurundi on X, eeas.europa.eu/burundi',
-    langue: 'fr'
-  }
+
+
 ];
 
 let formatIndex = 0;
