@@ -7,7 +7,7 @@ const PORT = process.env.PORT || 3000;
 const BOT_TOKEN = process.env.BOT_TOKEN || '8668406284:AAEbopVYNUdb6ZbJTwFZF_LMH7xiFs9pcXg';
 const CHANNEL = process.env.CHANNEL || '@BurundiInforama';
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
-const INTERVAL_HOURS = parseFloat(process.env.INTERVAL_HOURS || '2');
+const INTERVAL_HOURS = parseFloat(process.env.INTERVAL_HOURS || '1');
 const FB_PAGE_ID = process.env.FB_PAGE_ID;
 const FB_ACCESS_TOKEN = process.env.FB_ACCESS_TOKEN;
 const DATABASE_URL = process.env.DATABASE_URL;
@@ -27,28 +27,64 @@ function addLog(msg, type = '') {
 }
 
 // --- CONTENT FORMAT ROTATION ---
+// Each cycle rotates through these 7 content types for maximum variety
 const contentFormats = [
   {
     type: 'ACTUALITE',
     emoji: '📰',
     label: 'ACTUALITÉ',
-    searchPrompt: 'Cherche les dernières actualités politiques ou sociales du Burundi publiées dans les 3 derniers jours. Utilise ces sources prioritaires: site:iwacu-burundi.org OR site:abpinfo.bi OR site:rpa.bi OR site:focode.org OR site:ndondeza.org OR site:netpress.online OR site:radiopeacefm.com OR site:eeas.europa.eu/burundi actualité Burundi',
-    sources: 'iwacu-burundi.org, abpinfo.bi, rpa.bi, focode.org, ndondeza.org, netpress.online, radiopeacefm.com, eeas.europa.eu/burundi, SOSMediasBDI on X, pnininahazwe on X, rugbob78 on X, ABPInfos on X, UEauBurundi on X',
+    searchPrompt: 'Trouve une actualité politique ou sociale récente et importante du Burundi publiée dans les 3 derniers jours.',
+    sources: 'iwacu-burundi.org, SOSMediasBDI on X, FOCODE_ on X, Kaburahe on X, radio_rpa on X, rpa.bi, RT_Isanganiro on X',
     langue: 'fr'
   },
-
+  {
+    type: 'SPORT',
+    emoji: '⚽',
+    label: 'SPORT',
+    searchPrompt: 'Trouve une actualité sportive récente sur le Burundi: football (Vital\'O FC, Hawks FC, Athletico Olympic, équipe nationale Intamba mu rugamba), athlétisme, ou autre sport burundais.',
+    sources: 'X/Twitter: VitalOFC, HawksFC_Bdi, FBFBurundi, AthleticsBdi, sports burundi news',
+    langue: 'fr'
+  },
   {
     type: 'ECONOMIE',
     emoji: '💰',
     label: 'ÉCONOMIE',
-    searchPrompt: 'Cherche les dernières actualités économiques du Burundi publiées dans les 3 derniers jours: café, taux de change, investissements, budget, commerce EAC. Utilise ces sources prioritaires: site:iwacu-burundi.org OR site:abpinfo.bi OR site:ndondeza.org OR site:netpress.online OR site:banquedelarepublique.bi OR site:eeas.europa.eu/burundi économie Burundi',
-    sources: 'iwacu-burundi.org, abpinfo.bi, ndondeza.org, netpress.online, banquedelarepublique.bi, eeas.europa.eu/burundi, BRB_Burundi on X, OBRBurundi on X, AndreNikwigize1 on X, UEauBurundi on X',
+    searchPrompt: 'Trouve une actualité économique récente sur le Burundi: prix du café burundais à l\'export, taux de change BRB, commerce EAC, investissements, ou budget national.',
+    sources: 'BRB_Burundi on X, OBRBurundi on X, ndondeza.org, iwacu-burundi.org économie, banquedelarepublique.bi',
     langue: 'fr'
   },
-
-
-
-
+  {
+    type: 'CULTURE',
+    emoji: '🎭',
+    label: 'CULTURE & SOCIÉTÉ',
+    searchPrompt: 'Partage quelque chose d\'intéressant sur la culture burundaise: musique traditionnelle, danse des tambours, art, festivals, personnalité culturelle, ou tradition burundaise.',
+    sources: 'culture burundi actualite, musique burundaise, tambours burundi, artistes burundais',
+    langue: 'fr'
+  },
+  {
+    type: 'HISTOIRE',
+    emoji: '📖',
+    label: 'LE SAVIEZ-VOUS?',
+    searchPrompt: 'Partage un fait historique fascinant ou peu connu sur le Burundi: son histoire, sa géographie, sa culture, ou un événement marquant. Format: une question + réponse courte.',
+    sources: 'histoire burundi, faits burundi, géographie burundi',
+    langue: 'fr'
+  },
+  {
+    type: 'PROVERBE',
+    emoji: '🌿',
+    label: 'PROVERBE KIRUNDI',
+    searchPrompt: 'Trouve un proverbe traditionnel burundais authentique en Kirundi avec sa traduction en français et son explication culturelle.',
+    sources: 'proverbes kirundi burundi, sagesse burundaise, culture kirundi',
+    langue: 'rn'
+  },
+  {
+    type: 'DIASPORA',
+    emoji: '🌍',
+    label: 'DIASPORA',
+    searchPrompt: 'Trouve une information récente pertinente pour la communauté burundaise en diaspora: Belgique, France, Canada, USA — événements communautaires, transferts d\'argent, opportunités, ou nouvelles concernant les Burundais à l\'étranger.',
+    sources: 'diaspora burundaise europe, burundais belgique france, communaute burundaise canada',
+    langue: 'fr'
+  }
 ];
 
 let formatIndex = 0;
@@ -182,17 +218,19 @@ async function fetchNews() {
     ? `\nDo NOT include any article from these URLs (already posted):\n${recentUrls.join('\n')}`
     : '';
 
-  // ✅ CHANGED: Get 3 content formats per cycle (was 2) for more articles
+  // Get next 2 content formats to search (for variety each cycle)
   const format1 = getNextFormat();
   const format2 = getNextFormat();
-  const format3 = getNextFormat();
 
-  function buildGroupPrompt(format) {
-    return `Today is ${todayStr}. ${format.searchPrompt}
+  const GROUPS = [
+    {
+      label: `Format: ${format1.label}`,
+      format: format1,
+      prompt: `Today is ${todayStr}. ${format1.searchPrompt}
 
-Search sources: ${format.sources}
+Search sources: ${format1.sources}
 
-Return 3 to 5 items. Rules:
+Return 1 to 3 items. Rules:
 - ONLY content from the last 3 days (since ${minus3}) for news formats
 - For PROVERBE and HISTOIRE formats, date restriction does NOT apply
 - ONLY French or Kirundi — NO English
@@ -201,13 +239,26 @@ Return 3 to 5 items. Rules:
 - Do NOT return an error — always return JSON${avoidBlock}
 
 Return ONLY valid JSON:
-{"articles":[{"titre":"...","resume":"max 150 chars","source":"...","handle":"","url":"https://... or #${format.type.toLowerCase()}","langue":"fr or rn","categorie":"${format.type.toLowerCase()}","date":"YYYY-MM-DD","format":"${format.type}"}]}`;
-  }
+{"articles":[{"titre":"...","resume":"max 150 chars","source":"...","handle":"","url":"https://... or #${format1.type.toLowerCase()}","langue":"fr or rn","categorie":"${format1.type.toLowerCase()}","date":"YYYY-MM-DD","format":"${format1.type}"}]}`
+    },
+    {
+      label: `Format: ${format2.label}`,
+      format: format2,
+      prompt: `Today is ${todayStr}. ${format2.searchPrompt}
 
-  const GROUPS = [
-    { label: `Format: ${format1.label}`, format: format1, prompt: buildGroupPrompt(format1) },
-    { label: `Format: ${format2.label}`, format: format2, prompt: buildGroupPrompt(format2) },
-    { label: `Format: ${format3.label}`, format: format3, prompt: buildGroupPrompt(format3) }, // ✅ NEW
+Search sources: ${format2.sources}
+
+Return 1 to 3 items. Rules:
+- ONLY content from the last 3 days (since ${minus3}) for news formats
+- For PROVERBE and HISTOIRE formats, date restriction does NOT apply
+- ONLY French or Kirundi — NO English
+- Real URLs starting with http (use "#proverbe" or "#histoire" as URL if no real URL exists)
+- "date" field: use today's date ${todayStr} for proverbes/histoire
+- Do NOT return an error — always return JSON${avoidBlock}
+
+Return ONLY valid JSON:
+{"articles":[{"titre":"...","resume":"max 150 chars","source":"...","handle":"","url":"https://... or #${format2.type.toLowerCase()}","langue":"fr or rn","categorie":"${format2.type.toLowerCase()}","date":"YYYY-MM-DD","format":"${format2.type}"}]}`
+    }
   ];
 
   async function searchGroup(group) {
@@ -262,12 +313,13 @@ Return ONLY valid JSON:
     if (start === -1 || end === -1) return [];
     try {
       const parsed = JSON.parse(raw.substring(start, end + 1));
+      // Tag each article with the format type
       const articles = parsed.articles || [];
       return articles.map(a => ({ ...a, format: group.format.type, formatEmoji: group.format.emoji, formatLabel: group.format.label }));
     } catch (e) { return []; }
   }
 
-  addLog(`Cycle varié: ${format1.label} + ${format2.label} + ${format3.label}`, 'info');
+  addLog(`Cycle varié: ${format1.label} + ${format2.label}`, 'info');
 
   addLog(`Recherche ${format1.label}...`, 'info');
   const group1Articles = await searchGroup(GROUPS[0]);
@@ -279,18 +331,13 @@ Return ONLY valid JSON:
   const group2Articles = await searchGroup(GROUPS[1]);
   addLog(`${format2.label}: ${group2Articles.length} résultats`, group2Articles.length > 0 ? 'ok' : '');
 
-  await new Promise(r => setTimeout(r, 6000)); // ✅ NEW delay before format3
-
-  addLog(`Recherche ${format3.label}...`, 'info'); // ✅ NEW
-  const group3Articles = await searchGroup(GROUPS[2]); // ✅ NEW
-  addLog(`${format3.label}: ${group3Articles.length} résultats`, group3Articles.length > 0 ? 'ok' : ''); // ✅ NEW
-
-  const allArticles = [...group1Articles, ...group2Articles, ...group3Articles]; // ✅ CHANGED
+  const allArticles = [...group1Articles, ...group2Articles];
   addLog(`Total: ${allArticles.length} articles reçus`, allArticles.length > 0 ? 'ok' : '');
 
   // --- FILTER ---
   const fresh = [];
   for (const a of allArticles) {
+    // Special handling for proverbes and histoire (no real URL needed)
     const isSpecialFormat = a.format === 'PROVERBE' || a.format === 'HISTOIRE';
 
     if (!isSpecialFormat) {
@@ -318,6 +365,7 @@ Return ONLY valid JSON:
       continue;
     }
 
+    // For special formats, use titre as dedup key
     const dedupKey = isSpecialFormat ? `#${a.format?.toLowerCase()}-${(a.titre || '').substring(0, 30)}` : a.url;
     const posted = await isPosted(dedupKey);
     if (posted) {
@@ -386,6 +434,7 @@ async function postToTelegram(article) {
     addLog(`✅ Telegram [${article.formatLabel || 'NEWS'}]: ${(article.titre || '').substring(0, 45)}`, 'ok');
     return true;
   } else {
+    // Retry without markdown if parsing failed
     if (d.description && d.description.includes('parse')) {
       const r2 = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
         method: 'POST',
