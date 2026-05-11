@@ -33,7 +33,7 @@ const contentFormats = [
     emoji: '📰',
     label: 'ACTUALITÉ',
     searchPrompt: 'Trouve des actualités politiques ou sociales récentes et importantes du Burundi publiées dans les 3 derniers jours.',
-    sources: 'iwacu-burundi.org, SOSMediasBDI on X, FOCODE_ on X, focode.org, Kaburahe on X, radio_rpa on X, rpa.bi, RT_Isanganiro on X, pnininahazwe on X, ndondeza.org, HollyEude on X, rugbob78 on X, ABPInfos on X, abpinfo.bi, AndreNikwigize1 on X, youtube.com/@TeleRenaissance, youtube.com/@radiopubliqueafricaineijwi55, radiopeacefm.com',
+    sources: 'iwacu-burundi.org, SOSMediasBDI on X, FOCODE_ on X, focode.org, Kaburahe on X, radio_rpa on X, rpa.bi, RT_Isanganiro on X, pnininahazwe on X, ndondeza.org, HollyEude on X, rugbob78 on X, ABPInfos on X, abpinfo.bi, AndreNikwigize1 on X, youtube.com/@TeleRenaissance, youtube.com/@radiopubliqueafricaineijwi55, radiopeacefm.com, UEauBurundi on X, eeas.europa.eu/burundi',
     langue: 'fr'
   },
   {
@@ -49,7 +49,7 @@ const contentFormats = [
     emoji: '💰',
     label: 'ÉCONOMIE',
     searchPrompt: 'Trouve des actualités économiques récentes sur le Burundi: prix du café burundais à l\'export, taux de change BRB, commerce EAC, investissements, ou budget national.',
-    sources: 'BRB_Burundi on X, OBRBurundi on X, ndondeza.org, pnininahazwe on X, AndreNikwigize1 on X, partners4peace.com, iwacu-burundi.org économie, banquedelarepublique.bi, ABPInfos on X, abpinfo.bi',
+    sources: 'BRB_Burundi on X, OBRBurundi on X, ndondeza.org, pnininahazwe on X, AndreNikwigize1 on X, partners4peace.com, iwacu-burundi.org économie, banquedelarepublique.bi, ABPInfos on X, abpinfo.bi, UEauBurundi on X, eeas.europa.eu/burundi',
     langue: 'fr'
   },
   {
@@ -67,7 +67,7 @@ const contentFormats = [
     emoji: '🌍',
     label: 'DIASPORA',
     searchPrompt: 'Trouve des informations récentes pertinentes pour la communauté burundaise en diaspora: Belgique, France, Canada, USA — événements communautaires, transferts d\'argent, opportunités, ou nouvelles concernant les Burundais à l\'étranger.',
-    sources: 'diaspora burundaise europe, burundais belgique france, communaute burundaise canada, pnininahazwe on X, HollyEude on X, AndreNikwigize1 on X, partners4peace.com',
+    sources: 'diaspora burundaise europe, burundais belgique france, communaute burundaise canada, pnininahazwe on X, HollyEude on X, AndreNikwigize1 on X, partners4peace.com, UEauBurundi on X, eeas.europa.eu/burundi',
     langue: 'fr'
   }
 ];
