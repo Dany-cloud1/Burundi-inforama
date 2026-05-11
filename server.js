@@ -33,7 +33,7 @@ const contentFormats = [
     emoji: '📰',
     label: 'ACTUALITÉ',
     searchPrompt: 'Trouve des actualités politiques ou sociales récentes et importantes du Burundi publiées dans les 3 derniers jours.',
-    sources: 'iwacu-burundi.org, SOSMediasBDI on X, FOCODE_ on X, focode.org, Kaburahe on X, radio_rpa on X, rpa.bi, RT_Isanganiro on X, pnininahazwe on X, ndondeza.org, HollyEude on X, rugbob78 on X, ABPInfos on X, abpinfo.bi, AndreNikwigize1 on X',
+    sources: 'iwacu-burundi.org, SOSMediasBDI on X, FOCODE_ on X, focode.org, Kaburahe on X, radio_rpa on X, rpa.bi, RT_Isanganiro on X, pnininahazwe on X, ndondeza.org, HollyEude on X, rugbob78 on X, ABPInfos on X, abpinfo.bi, AndreNikwigize1 on X, youtube.com/@TeleRenaissance, youtube.com/@radiopubliqueafricaineijwi55',
     langue: 'fr'
   },
   {
@@ -41,7 +41,7 @@ const contentFormats = [
     emoji: '⚽',
     label: 'SPORT',
     searchPrompt: 'Trouve des actualités sportives récentes sur le Burundi: football (Vital\'O FC, Hawks FC, Athletico Olympic, équipe nationale Intamba mu rugamba), athlétisme, ou autre sport burundais.',
-    sources: 'X/Twitter: VitalOFC, HawksFC_Bdi, FBFBurundi, AthleticsBdi, sports burundi news',
+    sources: 'X/Twitter: VitalOFC, HawksFC_Bdi, FBFBurundi, AthleticsBdi, sports burundi news, youtube.com/@TeleRenaissance, youtube.com/@radiopubliqueafricaineijwi55',
     langue: 'fr'
   },
   {
@@ -57,7 +57,7 @@ const contentFormats = [
     emoji: '🎭',
     label: 'CULTURE & SOCIÉTÉ',
     searchPrompt: 'Partage des informations intéressantes sur la culture burundaise: musique traditionnelle, danse des tambours, art, festivals, personnalités culturelles, ou traditions burundaises.',
-    sources: 'culture burundi actualite, musique burundaise, tambours burundi, artistes burundais',
+    sources: 'culture burundi actualite, musique burundaise, tambours burundi, artistes burundais, youtube.com/@TeleRenaissance, youtube.com/@radiopubliqueafricaineijwi55',
     langue: 'fr'
   },
   {
